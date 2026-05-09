@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from pathlib import Path
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
@@ -13,7 +14,7 @@ def plot_pca(seed, data_dir: Path, out_dir: Path):
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
 
-    pca  = PCA(n_components=1, random_state=seed)
+    pca  = PCA(n_components=2, random_state=seed)
     X_pca   = pca.fit_transform(X_scaled)
 
     var  = pca.explained_variance_ratio_ * 100
