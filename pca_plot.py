@@ -25,10 +25,18 @@ def plot_pca(seed, data_dir: Path, out_dir: Path):
     for i, country in enumerate(countries):
         ax.annotate(country, (X_pca[i, 0], X_pca[i, 1]), fontsize=8)
 
+    features = X.columns
+    components = pca.components_
+    scale = np.max(np.abs(X_pca)) / np.max(np.abs(components))
+    for j, feat in enumerate(features):
+        cx, cy = components[0, j] * scale, components[1, j] * scale
+        ax.annotate("", xy=(cx, cy), xytext=(0, 0),
+                    arrowprops=dict(arrowstyle="-|>", color="crimson", lw=1.5))
+        ax.text(cx * 1.12, cy * 1.12, feat, color="crimson", fontsize=8, fontweight="bold")
+
     ax.set_xlabel(f"PC1 ({var[0]:.1f}% variance)")
     ax.set_ylabel(f"PC2 ({var[1]:.1f}% variance)")
-    ax.set_title("PCA projection — Europe")
-    ax.legend()
+    ax.set_title("PCA biplot — Europe")
 
     ax.axhline(0, color="#aaaaaa", linewidth=0.8, linestyle="--")
     ax.axvline(0, color="#aaaaaa", linewidth=0.8, linestyle="--")
