@@ -18,6 +18,17 @@ def plot_pca(seed, data_dir: Path, out_dir: Path):
     X_pca   = pca.fit_transform(X_scaled)
 
     var  = pca.explained_variance_ratio_ * 100
+    
+    # Get feature names and loadings
+    feature_names = X.columns
+    loadings = pca.components_
+    
+    # Find top contributing features for PC1 and PC2
+    top_pc1_idx = np.argsort(np.abs(loadings[0]))[-2:][::-1]
+    top_pc2_idx = np.argsort(np.abs(loadings[1]))[-2:][::-1]
+    
+    top_pc1_features = ", ".join([feature_names[i] for i in top_pc1_idx])
+    top_pc2_features = ", ".join([feature_names[i] for i in top_pc2_idx])
 
     fig, ax = plt.subplots(figsize=(10, 7))
     ax.scatter(X_pca[:, 0], X_pca[:, 1], alpha=0.7, s=50)
@@ -25,8 +36,8 @@ def plot_pca(seed, data_dir: Path, out_dir: Path):
     for i, country in enumerate(countries):
         ax.annotate(country, (X_pca[i, 0], X_pca[i, 1]), fontsize=8)
 
-    ax.set_xlabel(f"PC1 ({var[0]:.1f}% variance)")
-    ax.set_ylabel(f"PC2 ({var[1]:.1f}% variance)")
+    ax.set_xlabel(f"PC1 ({var[0]:.1f}% variance)\n[{top_pc1_features}]")
+    ax.set_ylabel(f"PC2 ({var[1]:.1f}% variance)\n[{top_pc2_features}]")
     ax.set_title("PCA projection — Europe")
     ax.legend()
 
