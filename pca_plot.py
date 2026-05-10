@@ -30,6 +30,17 @@ def plot_pca(seed, data_dir: Path, out_dir: Path):
     top_pc1_features = ", ".join([feature_names[i] for i in top_pc1_idx])
     top_pc2_features = ", ".join([feature_names[i] for i in top_pc2_idx])
 
+    # Get feature names and loadings
+    feature_names = X.columns
+    loadings = pca.components_
+
+    # Find top contributing features for PC1 and PC2
+    top_pc1_idx = np.argsort(np.abs(loadings[0]))[-2:][::-1]
+    top_pc2_idx = np.argsort(np.abs(loadings[1]))[-2:][::-1]
+
+    top_pc1_features = ", ".join([feature_names[i] for i in top_pc1_idx])
+    top_pc2_features = ", ".join([feature_names[i] for i in top_pc2_idx])
+
     fig, ax = plt.subplots(figsize=(10, 7))
     ax.scatter(X_pca[:, 0], X_pca[:, 1], alpha=0.7, s=50)
 
