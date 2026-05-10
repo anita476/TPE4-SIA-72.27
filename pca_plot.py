@@ -26,17 +26,6 @@ def plot_pca(seed, data_dir: Path, out_dir: Path):
     # Find top contributing features for PC1 and PC2
     top_pc1_idx = np.argsort(np.abs(loadings[0]))[-2:][::-1]
     top_pc2_idx = np.argsort(np.abs(loadings[1]))[-2:][::-1]
-    
-    top_pc1_features = ", ".join([feature_names[i] for i in top_pc1_idx])
-    top_pc2_features = ", ".join([feature_names[i] for i in top_pc2_idx])
-
-    # Get feature names and loadings
-    feature_names = X.columns
-    loadings = pca.components_
-
-    # Find top contributing features for PC1 and PC2
-    top_pc1_idx = np.argsort(np.abs(loadings[0]))[-2:][::-1]
-    top_pc2_idx = np.argsort(np.abs(loadings[1]))[-2:][::-1]
 
     top_pc1_features = ", ".join([feature_names[i] for i in top_pc1_idx])
     top_pc2_features = ", ".join([feature_names[i] for i in top_pc2_idx])
@@ -60,8 +49,8 @@ def plot_pca(seed, data_dir: Path, out_dir: Path):
     ax.set_ylabel(f"PC2 ({var[1]:.1f}% variance)")
     ax.set_title("PCA biplot — Europe")
 
-    ax.axhline(0, color="#aaaaaa", linewidth=0.8, linestyle="--")
-    ax.axvline(0, color="#aaaaaa", linewidth=0.8, linestyle="--")
+    ax.set_xlabel(f"PC1 ({var[0]:.1f}% variance)\n[{top_pc1_features}]")
+    ax.set_ylabel(f"PC2 ({var[1]:.1f}% variance)\n[{top_pc2_features}]")
 
     fig.tight_layout()
     p = out_dir / "pca.png"
