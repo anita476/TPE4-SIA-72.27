@@ -5,7 +5,7 @@ from pca_plot import plot_pca
 
 def main():
     parser = argparse.ArgumentParser(description="Visualise linear non-separability of a binary classification dataset.")
-    parser.add_argument("--data", default="data/europe.csv",required=True, help="Path to CSV dataset")
+    parser.add_argument("--data", default="data/europe.csv", help="Path to CSV dataset")
     parser.add_argument("--out", default="results/plots", help="Output directory")
     parser.add_argument("--seed", default=1, help="Seed for this run")
     args = parser.parse_args()
