@@ -36,7 +36,6 @@ class Kohonen:
         # self.weights con shape (k, k, input_dim)
             # k x k = neuronas
             # input_dim = cantidad de variables (7 en nuestro caso)
-            # se inicializa en fit()?? TODO porque si weight_init="samples" necesitás X.
 
     # -----------------------------------------------------------------
     # Inicialización de pesos
@@ -148,7 +147,6 @@ class Kohonen:
             Cantidad total de iteraciones. Se sugiere ~ 500 * n
             (con n = input_dim) si no se pasa nada.
         """
-        # TODO: si n_iter es None, usar 500 * input_dim
         if n_iter is None:
             n_iter = 500 * self.input_dim
         
