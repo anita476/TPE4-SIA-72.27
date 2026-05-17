@@ -29,6 +29,8 @@ class Kohonen:
         self.input_dim = input_dim
         self.eta_0 = eta_0
         self.radius_0 = radius_0
+        if self.radius_0 is None:
+            self.radius_0 = float(self.k)
         self.similarity = similarity
         self.weight_init = weight_init
         self.rng = np.random.default_rng(seed)
@@ -44,7 +46,7 @@ class Kohonen:
         shape = (self.k, self.k, self.input_dim)
         
         if self.weight_init == "random":
-            self.weights = self.rng.uniform(-1, 1, size=shape) # datos estandarizados asi que rango -1 a 1 esta bien
+            self.weights = self.rng.uniform(X.min(), X.max(), size=shape)
         elif self.weight_init == "samples":
             # elegimos k*k filas de X al azar (con reemplazo porque k*k puede ser > P (cantidad de entradas = paises))
             n_samples = self.k*self.k
@@ -66,23 +68,23 @@ class Kohonen:
         - "euclidean": argmin de ||x - W_ij||
         - "exponential": argmax de exp(-||x - W_ij||^2)
         """
+        diff = self.weights - x
+
         if self.similarity == "euclidean":
-            diff = self.weights - x
-            distances = np.linalg.norm(diff, axis=2)
-            flat_idx = np.argmin(distances)
-            return np.unravel_index(flat_idx, distances.shape)
+            scores = np.linalg.norm(diff, axis=2)
 
         elif self.similarity == "exponential":
-            raise NotImplementedError(
-                "Exponential similarity not implemented. "
-                "It requires input and weight vectors to be normalized to unit "
-                "length, which is not the case for the dataset"
-            )
+            # ‖x - W‖² y luego score = -exp(-d²)
+            dist2 = np.sum(diff * diff, axis=-1)
+            scores = -np.exp(-dist2)
         else:
             raise ValueError(
                 f"Unknown similarity measure: '{self.similarity}'. "
                 f"Expected 'euclidean' or 'exponential'."
             )
+
+        flat_idx = np.argmax(scores)
+        return np.unravel_index(flat_idx, scores.shape)
 
     # -----------------------------------------------------------------
     # Vecindario

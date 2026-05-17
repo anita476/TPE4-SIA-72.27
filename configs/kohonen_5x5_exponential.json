@@ -1,0 +1,9 @@
+{
+    "k": 5,
+    "eta_0": 0.5,
+    "radius_0": 5,
+    "n_iter": null,
+    "weight_init": "samples",
+    "similarity": "exponential",
+    "seed": 42
+}
