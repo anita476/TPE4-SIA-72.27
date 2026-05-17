@@ -17,6 +17,7 @@ Requires:
 import argparse
 import json
 import sys
+import textwrap
 from pathlib import Path
 
 import numpy as np
@@ -165,7 +166,8 @@ def main():
     for cell, cluster_id in cell_to_cluster.items():
         color = cmap(cluster_id / max(n_clusters - 1, 1))
         members = [c for c, cc in country_to_cell.items() if cc == cell]
-        label = f"celda {cell}: {', '.join(members)}"
+        wrapped = textwrap.fill(", ".join(members), width=28)
+        label = f"celda {cell}:\n{wrapped}"
         legend_handles.append(
             plt.Rectangle((0, 0), 1, 1, fc=color, ec="black", linewidth=0.5,
                            label=label)
