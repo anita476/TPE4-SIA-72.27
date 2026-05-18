@@ -9,6 +9,8 @@ Kohonen and Oja.
 import numpy as np
 import pandas as pd
 
+COUNTRY_COLUMN = "Country"
+
 
 def standardize(X):
     mean = X.mean(axis=0)
@@ -18,8 +20,8 @@ def standardize(X):
 
 def load_europe(path="data/europe.csv"):
     df = pd.read_csv(path)
-    countries = df["Country"].values
-    variables = df.columns[1:].tolist()
-    X_raw = df.drop(columns=["Country"]).values
+    countries = df[COUNTRY_COLUMN].values
+    feature_columns = [c for c in df.columns if c != COUNTRY_COLUMN]
+    X_raw = df[feature_columns].to_numpy(dtype=float)
     X, _, _ = standardize(X_raw)
-    return countries, X, variables
+    return countries, X, feature_columns
