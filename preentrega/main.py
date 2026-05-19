@@ -1,6 +1,6 @@
 import argparse
 from pathlib import Path
-from pca_plot import plot_pca
+from preentrega.pca_plot import plot_pca
 
 
 def main():
