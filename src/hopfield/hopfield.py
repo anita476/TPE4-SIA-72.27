@@ -1,7 +1,7 @@
 from utils.letters import load_letters, print_letters_line
 import numpy as np
 
-
+#
 def main():
     letters = load_letters("../../data/letters.txt")
     n = 6
