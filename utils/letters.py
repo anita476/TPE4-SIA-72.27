@@ -1,6 +1,8 @@
+import itertools
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+import pandas as pd
 import string
 
 def create_letter_plot(letters,ax,cmap='Blues'):
@@ -44,3 +46,46 @@ def load_letters(filepath):
         letters[string.ascii_uppercase[len(letters)]] = current
 
     return letters
+
+
+def group_analysis(letters):
+    flat_letters = {
+        k: m.flatten() for k, m in letters.items()
+    }
+    all_groups = itertools.combinations(flat_letters.keys(), 4)
+
+    avg_dot_product = []
+    max_dot_product = []
+
+    for g in all_groups:
+        group = np.array([v for k,v in flat_letters.items() if k in g])
+        orto_matrix = group.dot(group.T)
+        np.fill_diagonal(orto_matrix, 0)
+        #print(f'{g}\n{orto_matrix}\n-------------------------')
+        row, _ = orto_matrix.shape
+        avg_dot_product.append((np.abs(orto_matrix).sum()/(orto_matrix.size - row),g))
+        mav_v = np.abs(orto_matrix).max()
+        max_dot_product.append(((mav_v,np.count_nonzero(np.abs(orto_matrix)==mav_v)/2),g))
+
+
+    # ahora imprimo los grupos de valores mas bajo, medio, alto
+    df = pd.DataFrame(sorted(avg_dot_product),columns=['|<,>| medio','group'])
+    #df.head(15).style.format({'|<,>| medio':"{:.2f}"}).hide(axis='index')
+    print("Average Dot product\n-------------------")
+
+    print("Best 15:\n")
+    print(df.head(15).to_string(index=False, float_format=lambda x: f'{x:.2f}'))
+    print("Worst 5:\n")
+    print(df.tail(5).to_string(index=False,float_format=lambda  x:f'{x:.2f}'))
+    print("Max Dot product\n-------------------")
+
+    print("Best 15 (lowest)\n")
+    df2 = pd.DataFrame(sorted(max_dot_product),columns=['|<,>| max','group'])
+    print(df2.head(15).to_string(index=False, float_format=lambda x: 'max: {:.0f} | count: {:,.0.f}'))
+
+    df3 = df2.merge(df)
+    df3 = df3[['|<,>| max','|<,>| medio', 'group']]
+
+    print(df3.head(15).to_string(index=False,float_format=lambda  x:f'{x:.2f}'))
+
+    return
