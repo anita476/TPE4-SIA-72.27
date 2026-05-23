@@ -39,6 +39,8 @@ class HopfieldNetwork:
             print("  Initial state  (energy: {:.2f})".format(self.energy(s)))
             print_pattern("init", s)
 
+        # TODO: explain in presentation why we check period-1 and period-2 (and why nothing beyond)
+        s_pprev = None
         for step in range(1, max_iterations + 1):
             s_prev = s.copy()
             s = _step(self.W @ s)
@@ -47,10 +49,17 @@ class HopfieldNetwork:
                 print(f"\n  Step {step}  (energy: {self.energy(s):.2f})")
                 print_pattern(f"t={step}", s)
 
-            if np.array_equal(s, s_prev): # @todo should have a convergence window
+            # period-1: fixed point
+            if np.array_equal(s, s_prev):
                 if verbose:
                     print(f"\n  Converged after {step} step(s).")
                 break
+            # period-2: cycle
+            if s_pprev is not None and np.array_equal(s, s_pprev):
+                if verbose:
+                    print(f"\n  Cycle-2 detected after {step} step(s).")
+                break
+            s_pprev = s_prev
         else:
             if verbose:
                 print(f"\n  Did not converge in {max_iterations} steps.")
