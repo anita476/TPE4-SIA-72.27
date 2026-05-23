@@ -1,11 +1,9 @@
 {
-    "k": 5,
+    "k": 2,
     "eta_0": 0.01,
-    "radius_0": 5,
+    "radius_0": 2,
     "n_iter": null,
     "weight_init": "samples",
     "similarity": "euclidean",
-    "seed": 6
+    "seed": 42
 }
-
-

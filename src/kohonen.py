@@ -50,8 +50,12 @@ class Kohonen:
         elif self.weight_init == "samples":
             # elegimos k*k filas de X al azar (con reemplazo porque k*k puede ser > P (cantidad de entradas = paises))
             n_samples = self.k*self.k
-            # n_samples de indices random de 0 a P
-            indices = self.rng.integers(0, X.shape[0], size=n_samples)
+            if n_samples <= X.shape[0]:
+                # sin reemplazo: cada peso es un pais distinto
+                indices = self.rng.choice(X.shape[0], size=n_samples, replace=False)
+            else:
+                # con reemplazo: inevitable
+                indices = self.rng.choice(X.shape[0], size=n_samples, replace=True)
             self.weights = X[indices].reshape(shape)
             
         else:
@@ -83,7 +87,7 @@ class Kohonen:
                 f"Expected 'euclidean' or 'exponential'."
             )
 
-        flat_idx = np.argmax(scores)
+        flat_idx = np.argmin(scores) if self.similarity == "euclidean" else np.argmax(scores)
         return np.unravel_index(flat_idx, scores.shape)
 
     # -----------------------------------------------------------------
@@ -211,6 +215,17 @@ class Kohonen:
                         distances.append(d)
                 u[i,j] = np.mean(distances)
         return u
+
+    def quantization_error(self, X):
+        """
+        Average distance between each input and its winning neuron's weight vector.
+        Lower = neurons represent their assigned samples more accurately.
+        """
+        total = 0
+        for x in X:
+            i, j = self._winner(x)
+            total += np.linalg.norm(x - self.weights[i, j])
+        return total / len(X)
 
     def activations_per_neuron(self, X):
         """
