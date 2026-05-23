@@ -1,6 +1,5 @@
 import numpy as np
-from utils.letters import print_letters_line
-from utils.display_hopfield import print_pattern, print_separator, pattern_to_str
+from utils.display_hopfield import print_pattern
 
 def _step(x: np.ndarray) -> np.ndarray:
     return np.where(x > 0, 1.0, -1.0) # step perceptron !
@@ -71,4 +70,4 @@ class HopfieldNetwork:
 
     # @todo investigate
     def max_patterns(self) -> int:
-        return 0.15 * self.n
+        return int(0.15 * self.n)

@@ -1,27 +1,15 @@
-from utils.letters import load_letters, group_analysis, best_match, load_query,load_patterns,add_noise
-from utils.display_hopfield import print_pattern, print_separator, pattern_to_str
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from utils.letters import load_letters, group_analysis, best_match, load_query, load_patterns, add_noise
+from utils.display_hopfield import print_pattern, print_separator
 from HopfieldNetwork import HopfieldNetwork
 import numpy as np
 import argparse
 
-#
+
 def main():
-    letters = load_letters("../../data/letters.txt")
-    n = 6
-    letters_list = list(letters.values())
-
-    remainder = len(letters_list) % n
-    if remainder != 0:
-        letters_list += [np.ones((5, 5)) * (-1)] * (n - remainder)
-
-    # print the letter plots
-    """
-    for i in range(len(letters_list) // n):
-        letter_group = letters_list[i * n:(i + 1) * n]
-        print_letters_line(letter_group)
-    """
-    group_analysis(letters)
-
     parser = argparse.ArgumentParser(
         description="Run a Hopfield network on stored letter patterns."
     )
@@ -42,8 +30,16 @@ def main():
         help="Only print the final result, skip per-step output",
     )
     parser.add_argument("--noise", type=float, default=0.2)
-    parser.add_argument("--seed",help="Seed for reproducibility",type=int)
+    parser.add_argument("--seed", help="Seed for reproducibility", type=int)
+    parser.add_argument(
+        "--analyze", action="store_true",
+        help="Print group orthogonality analysis of all letters before running",
+    )
     args = parser.parse_args()
+
+    if args.analyze:
+        letters = load_letters("../../data/letters.txt")
+        group_analysis(letters)
 
     # load
     stored = load_patterns(args.patterns_file)
@@ -91,6 +87,7 @@ def main():
     print(f"  Closest stored pattern : {match}  ({similarity:.1f}% match)")
     print(f"  Final energy           : {net.energy(result):.4f}")
     print_separator('═')
+
 
 if __name__ == "__main__":
     main()

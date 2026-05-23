@@ -137,7 +137,7 @@ def group_analysis(letters):
 
     print("Best 15 (lowest)\n")
     df2 = pd.DataFrame(sorted(max_dot_product),columns=['|<,>| max','group'])
-    print(df2.head(15).to_string(index=False, float_format=lambda x: 'max: {:.0f} | count: {:,.0.f}'))
+    print(df2.head(15).to_string(index=False, formatters={'|<,>| max': lambda t: f'max: {t[0]:.0f} | count: {int(t[1])}'}))
 
     df3 = df2.merge(df)
     df3 = df3[['|<,>| max','|<,>| medio', 'group']]
@@ -151,12 +151,11 @@ def add_noise(pattern: np.ndarray, noise_pct: float, seed: int = None) -> np.nda
     """
     Flip a percentage of pixels in a 5x5 pattern randomly
     """
-    if seed is not None:
-        np.random.seed(seed)
+    rng = np.random.default_rng(seed)
 
     flat = pattern.flatten().copy()
     n_flip = max(1, int(len(flat) * noise_pct))
-    flip_indices = np.random.choice(len(flat), size=n_flip, replace=False)
+    flip_indices = rng.choice(len(flat), size=n_flip, replace=False)
     flat[flip_indices] *= -1
 
     return flat.reshape(pattern.shape)

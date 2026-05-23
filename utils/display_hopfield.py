@@ -1,9 +1,11 @@
 import numpy as np
 
 def pattern_to_str(matrix: np.ndarray) -> str:
-    """Render a 5x5 matrix as a printable string."""
+    """Render a flat or 2-D pattern as a printable grid."""
+    flat = matrix.flatten()
+    side = int(len(flat) ** 0.5)
     rows = []
-    for row in matrix.reshape(5, 5):
+    for row in flat.reshape(side, side):
         rows.append(' '.join('*' if v == 1 else '.' for v in row))
     return '\n'.join(rows)
 
