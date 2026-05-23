@@ -48,6 +48,62 @@ def load_letters(filepath):
     return letters
 
 
+def load_query(filepath: str) -> np.ndarray:
+    """
+    Load a single 5x5 pattern from a text file
+    Same '*'/space encoding as load_patterns.
+    """
+    pattern = np.ones((5, 5)) * -1
+    with open(filepath) as fp:
+        for idx, line in enumerate(fp):
+            if idx >= 5:
+                break
+            stripped = line.strip('\n')
+            for i, c in enumerate(stripped.ljust(5)):
+                if i < 5:
+                    pattern[idx][i] = 1 if c == '*' else -1
+    return pattern
+
+
+def load_patterns(filepath: str) -> dict[str, np.ndarray]:
+    letters = {}
+    current = np.ones((5, 5)) * -1
+    current_name = None
+    idx = 0
+
+    with open(filepath) as fp:
+        for line in fp:
+            stripped = line.strip('\n')
+            if stripped.startswith('='):
+                if idx > 0 and current_name is not None:   # save previous pattern
+                    letters[current_name] = current
+                current = np.ones((5, 5)) * -1
+                current_name = stripped[1:].strip() or string.ascii_uppercase[len(letters)]
+                idx = 0
+            elif idx < 5:
+                for i, c in enumerate(stripped.ljust(5)):
+                    if i < 5:
+                        current[idx][i] = 1 if c == '*' else -1
+                idx += 1
+
+    if idx > 0 and current_name is not None:   # save last pattern
+        letters[current_name] = current
+
+    return letters
+
+
+def best_match(result: np.ndarray, stored: dict[str, np.ndarray]) -> tuple[str, float]:
+    """Return the stored pattern name closest to result (by dot product)"""
+    flat = result.flatten()
+    best_name, best_score = None, -np.inf
+    for name, pat in stored.items():
+        score = float(np.dot(flat, pat.flatten()))
+        if score > best_score:
+            best_score, best_name = score, name
+    similarity = best_score / len(flat) * 100  # % agreement
+    return best_name, similarity
+
+
 def group_analysis(letters):
     flat_letters = {
         k: m.flatten() for k, m in letters.items()
@@ -89,3 +145,18 @@ def group_analysis(letters):
     print(df3.head(15).to_string(index=False,float_format=lambda  x:f'{x:.2f}'))
 
     return
+
+
+def add_noise(pattern: np.ndarray, noise_pct: float, seed: int = None) -> np.ndarray:
+    """
+    Flip a percentage of pixels in a 5x5 pattern randomly
+    """
+    if seed is not None:
+        np.random.seed(seed)
+
+    flat = pattern.flatten().copy()
+    n_flip = max(1, int(len(flat) * noise_pct))
+    flip_indices = np.random.choice(len(flat), size=n_flip, replace=False)
+    flat[flip_indices] *= -1
+
+    return flat.reshape(pattern.shape)
