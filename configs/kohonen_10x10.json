@@ -1,7 +1,7 @@
 {
-    "k": 10,
-    "eta_0": 0.5,
-    "radius_0": 10,
+    "k": 28,
+    "eta_0": 0.01,
+    "radius_0": 28,
     "n_iter": null,
     "weight_init": "samples",
     "similarity": "euclidean",

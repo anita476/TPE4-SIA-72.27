@@ -71,9 +71,15 @@ def load_config(path):
 # -----------------------------------------------------------------------------
 plt.rcParams.update({
     "font.family": "sans-serif",
-    "axes.titlesize": 14,
+    "font.size": 12,
+    "axes.titlesize": 16,
     "axes.titleweight": "bold",
-    "axes.labelsize": 11,
+    "axes.labelsize": 13,
+    "xtick.labelsize": 11,
+    "ytick.labelsize": 11,
+    "figure.facecolor": "none",
+    "axes.facecolor": "none",
+    "savefig.transparent": True,
 })
 
 
@@ -117,9 +123,9 @@ def plot_countries(red, X, countries, K, out_path):
         count_label = str(activations[i, j])
         country_text = "\n".join(names)
         ax.text(j, i - 0.22, count_label, ha="center", va="center",
-                fontsize=11, fontweight="bold", color=color)
+                fontsize=12, fontweight="bold", color=color)
         ax.text(j, i + 0.18, country_text, ha="center", va="center",
-                fontsize=7, color=color, linespacing=1.3)
+                fontsize=12, color=color, linespacing=1.3)
 
     # Dead neurons: show dash
     for i in range(K):
@@ -135,7 +141,7 @@ def plot_countries(red, X, countries, K, out_path):
     ax.set_yticklabels([f"fila {i}" for i in range(K)])
     ax.set_title(f"Países agrupados por la red de Kohonen ({K}×{K})", pad=14)
     plt.tight_layout()
-    plt.savefig(out_path, dpi=150, bbox_inches="tight")
+    plt.savefig(out_path, dpi=150, bbox_inches="tight", transparent=True)
     plt.close()
     return labels
 
@@ -161,7 +167,7 @@ def plot_umatrix_with_countries(red, X, countries, K, out_path):
             color = _text_color(norm)
             # U-matrix value: larger, at top of cell
             ax.text(j, i - 0.2, f"{u[i, j]:.2f}", ha="center", va="center",
-                    fontsize=10, fontweight="bold", color=color)
+                    fontsize=12, fontweight="bold", color=color)
             # Country names: smaller, below the value
             if (i, j) in labels:
                 names_text = "\n".join(labels[(i, j)])
@@ -176,7 +182,7 @@ def plot_umatrix_with_countries(red, X, countries, K, out_path):
     ax.set_title("U-matrix con países\n"
                  "Zonas oscuras indican fronteras entre clusters", pad=14)
     plt.tight_layout()
-    plt.savefig(out_path, dpi=150, bbox_inches="tight")
+    plt.savefig(out_path, dpi=150, bbox_inches="tight", transparent=True)
     plt.close()
 
 
@@ -230,9 +236,142 @@ def plot_variable_heatmaps(red, X, countries, variables, K, out_path):
     fig.suptitle("Valor promedio por neurona — una variable a la vez",
                  fontsize=14, fontweight="bold", y=1.01)
     plt.tight_layout()
-    plt.savefig(out_path, dpi=150, bbox_inches="tight")
+    plt.savefig(out_path, dpi=150, bbox_inches="tight", transparent=True)
     plt.close()
 
+
+
+def plot_cluster_profiles(labels, X, countries, variables, out_path):
+    """
+    One mini bar chart per active cluster. Each bar = mean of a variable for
+    countries in that cluster; error bar = ±1 std dev.
+    Tall bar + small error → defining characteristic of the cluster.
+    Tall bar + large error → variable is not cohesive in that cluster.
+    """
+    country_to_idx = {c: i for i, c in enumerate(countries)}
+    active_cells = sorted(labels.items())
+    n_clusters = len(active_cells)
+
+    ncols = 4
+    nrows = (n_clusters + ncols - 1) // ncols
+    bar_colors = plt.cm.tab10(np.linspace(0, 0.7, len(variables)))
+
+    fig, axes = plt.subplots(nrows, ncols,
+                             figsize=(ncols * 3.8, nrows * 3.2),
+                             sharey=True)
+    axes = axes.flatten()
+
+    x = np.arange(len(variables))
+
+    for idx, (cell, names) in enumerate(active_cells):
+        ax = axes[idx]
+        idxs = [country_to_idx[c] for c in names]
+        samples = X[idxs]
+        means = samples.mean(axis=0)
+        stds = samples.std(axis=0) if len(idxs) > 1 else np.zeros(len(variables))
+
+        bars = ax.bar(x, means, yerr=stds, capsize=4,
+                      color=bar_colors, edgecolor="black", linewidth=0.5,
+                      error_kw=dict(elinewidth=1.2, ecolor="black", capthick=1.2))
+
+        ax.axhline(0, color="black", linewidth=0.7, linestyle="--", alpha=0.4)
+        ax.set_xticks(x)
+        ax.set_xticklabels(variables, rotation=40, ha="right", fontsize=8)
+        ax.set_title(f"celda {cell}\n{', '.join(names)}",
+                     fontsize=8, fontweight="bold", pad=4)
+        ax.set_ylabel("std scores" if idx % ncols == 0 else "", fontsize=8)
+        ax.tick_params(axis="y", labelsize=7)
+        ax.grid(axis="y", alpha=0.25, linestyle="--")
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+
+    for ax in axes[n_clusters:]:
+        ax.set_visible(False)
+
+    fig.suptitle("Perfil de cada cluster — media ± desvío por variable (datos estandarizados)",
+                 fontsize=13, fontweight="bold", y=1.01)
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=150, bbox_inches="tight", transparent=True)
+    plt.close()
+
+
+def plot_cohesion_table(labels, X, countries, variables, out_path):
+    """
+    For each active neuron, compute the std dev of each variable across its
+    countries. Low std = countries in that cell are genuinely similar.
+    Saves a PNG table sorted by mean std (best clusters first).
+    """
+    country_to_idx = {c: i for i, c in enumerate(countries)}
+
+    rows = []
+    for cell, names in sorted(labels.items()):
+        idxs = [country_to_idx[c] for c in names]
+        samples = X[idxs]
+        stds = samples.std(axis=0) if len(idxs) > 1 else np.zeros(X.shape[1])
+        rows.append({
+            "Celda": str(cell),
+            "Países": ", ".join(names),
+            **{var: round(float(std), 3) for var, std in zip(variables, stds)},
+            "Media": round(float(stds.mean()), 3),
+        })
+
+    rows.sort(key=lambda r: r["Media"])
+
+    # Save CSV alongside the PNG
+    import pandas as pd
+    csv_path = Path(str(out_path).replace(".png", ".csv"))
+    pd.DataFrame(rows).rename(columns={"Media": "Media std"}).to_csv(csv_path, index=False)
+
+    col_labels = ["Celda", "Países"] + list(variables) + ["Media std"]
+    cell_data = [
+        [r["Celda"], r["Países"]] + [r[v] for v in variables] + [r["Media"]]
+        for r in rows
+    ]
+
+    n_rows = len(cell_data)
+    n_cols = len(col_labels)
+
+    fig, ax = plt.subplots(figsize=(max(14, n_cols * 1.4), 0.5 + 0.55 * (n_rows + 1)))
+    ax.axis("off")
+
+    tbl = ax.table(cellText=cell_data, colLabels=col_labels,
+                   cellLoc="center", loc="center")
+    tbl.auto_set_font_size(False)
+    tbl.set_fontsize(9)
+    tbl.scale(1, 1.6)
+
+    # Header
+    for j in range(n_cols):
+        cell = tbl[0, j]
+        cell.set_facecolor("#2E3A4E")
+        cell.set_text_props(color="white", fontweight="bold")
+
+    # Rows: alternating bg, highlight "Países" and "Media" columns
+    for i, row in enumerate(rows, start=1):
+        bg = "#F2F4F7" if i % 2 == 0 else "white"
+        # Color the "Media std" cell by quality: green=low, red=high
+        mean_val = row["Media"]
+        all_means = [r["Media"] for r in rows]
+        norm = (mean_val - min(all_means)) / (max(all_means) - min(all_means) + 1e-9)
+        media_bg = plt.cm.RdYlGn_r(norm * 0.7 + 0.15)  # avoid extremes
+
+        for j in range(n_cols):
+            c = tbl[i, j]
+            if j == n_cols - 1:  # Media column
+                c.set_facecolor(media_bg)
+                c.set_text_props(fontweight="bold")
+            elif j == 1:  # Países column
+                c.set_facecolor(bg)
+                c.set_text_props(color="#2E3A4E", fontweight="bold")
+                c.set_width(0.35)
+            else:
+                c.set_facecolor(bg)
+            c.set_edgecolor("#CCCCCC")
+
+    fig.patch.set_alpha(0)
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=150, bbox_inches="tight", transparent=True)
+    plt.close()
 
 
 def plot_europe_map(labels, experiment_name, out_path):
@@ -318,7 +457,56 @@ def plot_europe_map(labels, experiment_name, out_path):
     ax.set_ylabel("Latitud", fontsize=10)
 
     plt.tight_layout()
-    plt.savefig(out_path, dpi=150, bbox_inches="tight")
+    plt.savefig(out_path, dpi=150, bbox_inches="tight", transparent=True)
+    plt.close()
+
+
+def plot_schedules(eta_0, radius_0, n_iter, out_path):
+    t = np.arange(n_iter)
+    eta    = eta_0 / (t + 1)
+    radius = np.maximum(1.0, radius_0 / (t + 1))
+
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
+
+    ax1.plot(t, eta, color="#1E88E5", linewidth=2)
+    ax1.axhline(0, color="black", linewidth=0.5, alpha=0.3)
+    ax1.set_ylabel("η(t)  —  learning rate")
+    ax1.set_ylim(bottom=0)
+    ax1.set_facecolor("none")
+    ax1.spines["top"].set_visible(False)
+    ax1.spines["right"].set_visible(False)
+    ax1.grid(alpha=0.2, linestyle="--")
+    ax1.text(0.97, 0.82, r"$\eta(t) = \eta_0\,/\,(t+1)$",
+             transform=ax1.transAxes, ha="right", fontsize=12,
+             color="#1E88E5",
+             bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.6))
+
+    ax2.plot(t, radius, color="#FB8C00", linewidth=2)
+    ax2.axhline(1.0, color="black", linewidth=0.8, linestyle=":", alpha=0.5,
+                label="floor = 1")
+    ax2.set_ylabel("R(t)  —  neighborhood radius")
+    ax2.set_xlabel("iteration  t")
+    ax2.set_ylim(bottom=0)
+    ax2.set_facecolor("none")
+    ax2.spines["top"].set_visible(False)
+    ax2.spines["right"].set_visible(False)
+    ax2.grid(alpha=0.2, linestyle="--")
+    ax2.legend(framealpha=0.6)
+    ax2.text(0.97, 0.82, r"$R(t) = \max\!\left(1,\; R_0\,/\,(t+1)\right)$",
+             transform=ax2.transAxes, ha="right", fontsize=12,
+             color="#FB8C00",
+             bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.6))
+
+    t_floor_r = int(radius_0 - 1)
+    if 0 < t_floor_r < n_iter:
+        ax2.axvline(t_floor_r, color="#FB8C00", linewidth=1,
+                    linestyle="--", alpha=0.6)
+        ax2.text(t_floor_r + n_iter * 0.01,
+                 ax2.get_ylim()[1] * 0.6, "R = 1 (floor)",
+                 fontsize=9, color="#FB8C00", alpha=0.8)
+
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=150, bbox_inches="tight", transparent=True)
     plt.close()
 
 
@@ -352,9 +540,14 @@ def main():
         similarity=config.get("similarity", "euclidean"),
         seed=config.get("seed"),
     )
-    red.fit(X, n_iter=config.get("n_iter"))
+    n_iter = config.get("n_iter") or 500 * X.shape[1]
+    red.fit(X, n_iter=n_iter)
 
     print("\nGenerating plots...")
+    plot_schedules(config["eta_0"], config.get("radius_0") or float(K),
+                   n_iter, out_dir / "schedules.png")
+    print(f"  ✓ {out_dir / 'schedules.png'}")
+
     labels = plot_countries(red, X, countries, K, out_dir / "countries.png")
     print(f"  ✓ {out_dir / 'countries.png'}")
 
@@ -369,6 +562,13 @@ def main():
     plot_europe_map(labels, experiment_name, out_dir / "europe_geographic.png")
     print(f"  ✓ {out_dir / 'europe_geographic.png'}")
 
+    plot_cohesion_table(labels, X, countries, variables, out_dir / "cohesion_table.png")
+    print(f"  ✓ {out_dir / 'cohesion_table.png'}")
+    print(f"  ✓ {out_dir / 'cohesion_table.csv'}")
+
+    plot_cluster_profiles(labels, X, countries, variables, out_dir / "cluster_profiles.png")
+    print(f"  ✓ {out_dir / 'cluster_profiles.png'}")
+
     print("\nClusters encontrados:")
     print("-" * 50)
     for (i, j), names in sorted(labels.items()):
@@ -377,9 +577,11 @@ def main():
     n_active = len(labels)
     n_dead = K * K - n_active
     max_cell = tuple(int(x) for x in np.unravel_index(u.argmax(), u.shape))
+    qe = red.quantization_error(X)
 
     print(f"\nNeuronas activas: {n_active} de {K * K}")
     print(f"Neuronas muertas: {n_dead}")
+    print(f"Quantization error: {qe:.4f}")
     print(f"Distancia máxima a vecinos (frontera más fuerte): "
           f"{u.max():.3f} en celda {max_cell}")
 
@@ -392,6 +594,7 @@ def main():
             f.write(f"  celda ({i}, {j}): {', '.join(names)}\n")
         f.write(f"\nNeuronas activas: {n_active} de {K * K}\n")
         f.write(f"Neuronas muertas: {n_dead}\n")
+        f.write(f"Quantization error: {qe:.4f}\n")
         f.write(f"Distancia máxima a vecinos (frontera más fuerte): "
                 f"{u.max():.3f} en celda {max_cell}\n")
     print(f"\nSummary saved to {summary_path}")

@@ -221,3 +221,10 @@ __marimo__/
 /results/
 
 .DS_Store
+
+# extras
+data/dataset_characterization.py
+.gitignore
+data/hi.py
+data/radar.py
+scripts/schedules_plot.py
