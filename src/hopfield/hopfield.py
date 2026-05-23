@@ -89,7 +89,7 @@ def main():
     if similarity == 100.0 and not is_inverse:
         print(f"  Result                 : {match} exact match")
     elif similarity == 100.0 and is_inverse:
-        print(f"  Result                 : -{match} converged to INVERSE of {match}")
+        print(f"  Result                 : -{match} converged to inverse of {match}")
     else:
         print(f"  Result                 : {match} spurious state ({similarity:.1f}% match with closest pattern)")
 
