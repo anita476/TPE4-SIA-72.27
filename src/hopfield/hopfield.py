@@ -1,6 +1,7 @@
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.stdout.reconfigure(encoding='utf-8')
 
 from utils.letters import load_letters, group_analysis, best_match, load_query, load_patterns, add_noise
 from utils.display_hopfield import print_pattern, print_separator
@@ -83,8 +84,15 @@ def main():
     print_pattern("result", result)
     print()
 
-    match, similarity = best_match(result, stored)
-    print(f"  Closest stored pattern : {match}  ({similarity:.1f}% match)")
+    match, similarity, is_inverse = best_match(result, stored)
+
+    if similarity == 100.0 and not is_inverse:
+        print(f"  Result                 : {match} exact match")
+    elif similarity == 100.0 and is_inverse:
+        print(f"  Result                 : -{match} converged to INVERSE of {match}")
+    else:
+        print(f"  Result                 : {match} spurious state ({similarity:.1f}% match with closest pattern)")
+
     print(f"  Final energy           : {net.energy(result):.4f}")
     print_separator('═')
 

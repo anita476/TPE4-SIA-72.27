@@ -92,16 +92,23 @@ def load_patterns(filepath: str) -> dict[str, np.ndarray]:
     return letters
 
 
-def best_match(result: np.ndarray, stored: dict[str, np.ndarray]) -> tuple[str, float]:
-    """Return the stored pattern name closest to result (by dot product)"""
+def best_match(result: np.ndarray, stored: dict[str, np.ndarray]) -> tuple[str, float, bool]:
+    """
+    Return (name, similarity%, is_inverse) for the stored pattern closest to result.
+    Checks both result and -result so inverse attractors are detected correctly.
+    """
     flat = result.flatten()
-    best_name, best_score = None, -np.inf
+    best_name, best_score, is_inverse = None, -np.inf, False
     for name, pat in stored.items():
-        score = float(np.dot(flat, pat.flatten()))
+        pat_flat = pat.flatten()
+        score     = float(np.dot( flat, pat_flat))
+        inv_score = float(np.dot(-flat, pat_flat))
         if score > best_score:
-            best_score, best_name = score, name
-    similarity = best_score / len(flat) * 100  # % agreement
-    return best_name, similarity
+            best_score, best_name, is_inverse = score, name, False
+        if inv_score > best_score:
+            best_score, best_name, is_inverse = inv_score, name, True
+    similarity = best_score / len(flat) * 100
+    return best_name, similarity, is_inverse
 
 
 def group_analysis(letters):
