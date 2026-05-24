@@ -1,20 +1,25 @@
 import itertools
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap
 import seaborn as sns
 import pandas as pd
 import string
 
-def create_letter_plot(letters,ax,cmap='Blues'):
+BG_COLOR='#fff5ec'
+MY_CMAP = ListedColormap([BG_COLOR, '#76373b'])
+def create_letter_plot(letters,ax,cmap=MY_CMAP,bg_color=BG_COLOR):
+    ax.set_facecolor(bg_color)
     p = sns.heatmap(letters, ax=ax, annot=False,cbar=False, cmap=cmap,square=True,linewidth=2,linecolor='black')
     p.xaxis.set_visible(False)
     p.yaxis.set_visible(False)
     return p
 
 
-def print_letters_line(letters,cmap='Blues',cmaps=[]):
+def print_letters_line(letters,cmap=MY_CMAP,cmaps=[],bg_color=BG_COLOR):
     fig,ax =plt.subplots(1,len(letters))
     fig.set_dpi(360)
+    fig.patch.set_facecolor(bg_color)
     if not cmaps:
         cmaps =[cmap]*len(letters)
     if len(cmaps)!=len(letters):
