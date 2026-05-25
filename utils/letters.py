@@ -153,15 +153,18 @@ def group_analysis(letters):
 
     df3 = df2.merge(df)
     df3 = df3[['|<,>| max','|<,>| medio', 'group']]
-
+    print("Top 15")
     print(df3.head(15).to_string(index=False,float_format=lambda  x:f'{x:.2f}'))
+
+    print("Worst 15")
+    print(df3.tail(15).to_string(index=False,float_format=lambda  x:f'{x:.2f}'))
 
     return
 
 
 def add_noise(pattern: np.ndarray, noise_pct: float, seed: int = None) -> np.ndarray:
     """
-    Flip a percentage of pixels in a 5x5 pattern randomly
+    flip a percentage of pixels in a 5x5 pattern randomly
     """
     rng = np.random.default_rng(seed)
 
