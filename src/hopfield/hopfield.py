@@ -40,6 +40,8 @@ def main():
 
     if args.analyze:
         letters = load_letters("../../data/letters.txt")
+        print("---------------------------------------------------")
+        print("------------------GROUP ANALYSIS ------------------")
         group_analysis(letters)
 
     # load
