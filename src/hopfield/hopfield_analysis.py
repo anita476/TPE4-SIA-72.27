@@ -588,7 +588,7 @@ def plot_capacity_experiment(all_letters: dict, out: Path,
 def main():
     apply_style()
 
-    patterns_file = ROOT / "data" / "patterns.txt"
+    patterns_file = ROOT / "data" / "patterns_worst.txt"
     letters_file  = ROOT / "data" / "letters.txt"
     out_dir       = ROOT / "results" / "hopfield"
 

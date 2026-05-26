@@ -29,16 +29,18 @@ C_THRESH   = '#76373b'
 CLIFF_THRESHOLD = 0.5  # crossover: correct recovery becomes less likely than not
 
 
-def run_trial(net, query_flat, stored, noise_pct, seed):
-    noisy = add_noise(query_flat.reshape(5, 5), noise_pct, seed=seed).flatten()
+def run_trial(net, query_flat, noise_pct, seed):
+    noisy = add_noise(
+        query_flat.reshape(5, 5),
+        noise_pct,
+        seed=seed
+    ).flatten()
     result = net.predict(noisy, max_iterations=20, verbose=False)
-    _, similarity, is_inverse = best_match(result, stored)
-    if similarity == 100.0 and not is_inverse:
+    if np.array_equal(result, query_flat):
         return "correct"
-    elif similarity == 100.0 and is_inverse:
+    if np.array_equal(result, -query_flat):
         return "inverse"
     return "spurious"
-
 
 def analyse(patterns_file, noise_steps=20, trials=30, max_iter=20, seed=42):
     stored = load_patterns(patterns_file)
@@ -58,7 +60,7 @@ def analyse(patterns_file, noise_steps=20, trials=30, max_iter=20, seed=42):
         for ni, noise_pct in enumerate(noise_levels):
             counts = {"correct": 0, "inverse": 0, "spurious": 0}
             for t in range(trials):
-                outcome = run_trial(net, flat, stored, noise_pct,
+                outcome = run_trial(net, flat, noise_pct,
                                     seed=seed + ni * 1000 + t)
                 counts[outcome] += 1
             results[name].append(counts)

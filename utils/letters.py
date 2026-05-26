@@ -157,7 +157,18 @@ def group_analysis(letters):
     print(df3.head(15).to_string(index=False,float_format=lambda  x:f'{x:.2f}'))
 
     print("Worst 15")
-    print(df3.tail(15).to_string(index=False,float_format=lambda  x:f'{x:.2f}'))
+
+    df_worst = df3.sort_values(
+        by=['|<,>| max', '|<,>| medio'],
+        ascending=[False, False],
+        key=lambda col: col if col.name == '|<,>| medio'
+        else col.apply(lambda t: t[0])  # extract max value from tuple
+    )
+
+    print(df_worst.head(15).to_string(
+        index=False,
+        float_format=lambda x: f'{x:.2f}'
+    ))
 
     return
 
