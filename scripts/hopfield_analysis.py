@@ -293,7 +293,7 @@ def plot_recovery_steps(stored: dict, query_name: str,
         # cols 2 …: steps (pad with final if trajectory shorter)
         for k in range(MAX_EXTRA):
             idx = min(k + 1, len(states) - 1)   # clamp to last known state
-            is_final = (k + 1) >= len(states)
+            is_final = (k + 1) >= len(states) - 1
             bc = border if is_final else None
             draw_pattern(axes[i, 2 + k], states[idx],
                          title="", energy=net.energy(states[idx]),

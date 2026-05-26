@@ -18,6 +18,7 @@ import sys
 import argparse
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 from pathlib import Path
 
 # ── path setup ────────────────────────────────────────────────────────────────
@@ -125,9 +126,118 @@ def draw_cell(ax, state: np.ndarray, border_color: str = None,
         spine.set_linewidth(lw if border_color else 0.8)
 
 
+FIELD_CMAP = mcolors.LinearSegmentedColormap.from_list(
+    "field", ["#378ADD", BG, CELL_ON], N=256
+)
+
+
+def draw_field(ax, h_flat: np.ndarray, title: str,
+               title_color: str = TITLE_COLOR, border_color: str = None,
+               lw: float = 1.2):
+    """Draw the 25-element local field h = W·s as a coloured 5×5 grid with values."""
+    h = np.array(h_flat).flatten().reshape(5, 5)
+    abs_max = max(float(np.abs(h).max()), 1e-9)
+    norm_fn = mcolors.Normalize(vmin=-abs_max, vmax=abs_max)
+    cmap_fn = plt.get_cmap(FIELD_CMAP)
+
+    ax.set_facecolor(BG)
+    ax.set_xlim(0, 5)
+    ax.set_ylim(0, 5)
+    ax.set_aspect("equal")
+    ax.set_xticks([])
+    ax.set_yticks([])
+
+    for r in range(5):
+        for c in range(5):
+            val = h[r, c]
+            face = cmap_fn(norm_fn(val))
+            ax.add_patch(plt.Rectangle(
+                (c, 4 - r), 1, 1,
+                facecolor=face, edgecolor=GRID_COL, linewidth=0.5,
+            ))
+            norm_abs = abs(val) / abs_max
+            txt_col = "white" if norm_abs > 0.55 else "#333333"
+            ax.text(c + 0.5, 4.5 - r, f"{val:.1f}",
+                    ha="center", va="center",
+                    fontsize=6, color=txt_col, fontweight="bold")
+
+    for spine in ax.spines.values():
+        spine.set_visible(True)
+        spine.set_color(border_color if border_color else GRID_COL)
+        spine.set_linewidth(lw if border_color else 0.8)
+
+    ax.set_title(title, fontsize=7.5, color=title_color, pad=5, ha="center")
+
+
+def plot_fields(net, orig: np.ndarray, update_states: list,
+                noise: float, n_flipped: int, outcome: str,
+                label_str: str, mode: str, out_path: Path):
+    """
+    Save a separate figure showing h(t) = W·s(t) at every step.
+
+    Layout (one column per step):
+      col 0 : W · ξ_orig   — confirms the original is a fixed point
+      col 1 : h(0) = W·s(0) — field that produced s(1)
+      col 2 : h(1) = W·s(1) — field that produced s(2)
+      …
+      col T : h(T) = W·s(T) — field of the converged state (confirms stability)
+    """
+    border = OUTCOME_COLOR[outcome]
+    n_states = len(update_states)          # s(0) … s(T)
+    n_cols   = 1 + n_states               # orig + every update state
+
+    cell_w, cell_h = 1.4, 1.6
+    fig_w = max(8, n_cols * cell_w + 1.0)
+
+    fig, axes = plt.subplots(
+        1, n_cols,
+        figsize=(fig_w, cell_h + 1.8),
+        facecolor=BG,
+        dpi=FIG_DPI,
+    )
+    axes = np.atleast_1d(axes)
+
+    # ── col 0 : field of the original pattern ────────────────────────────────
+    h_orig = net.W @ orig
+    draw_field(axes[0], h_orig,
+               title=f"campo de ξ\n(original [{label_str}])",
+               title_color=TITLE_COLOR, border_color=C_NEUTRAL, lw=1.8)
+
+    # ── cols 1 … n_states : h(t) = W·s(t) ───────────────────────────────────
+    for si, state in enumerate(update_states):
+        ax = axes[1 + si]
+        h = net.W @ state
+        is_last = (si == n_states - 1)
+        step_lbl = f"sweep {si}" if mode == "async" else f"t = {si}"
+
+        if si == 0:
+            title  = f"h(0) = W·s(0)\n(noisy, {noise:.0%} / {n_flipped} px)"
+            bc, lw = C_NEUTRAL, 1.8
+            tc     = TITLE_COLOR
+        elif is_last:
+            title  = f"h({si}) = W·s({si})\n({OUTCOME_LABEL[outcome]}, {step_lbl})"
+            bc, lw = border, 2.8
+            tc     = border
+        else:
+            title  = f"h({si}) = W·s({si})\n({step_lbl})"
+            bc, lw = "#888888", 1.4
+            tc     = TITLE_COLOR
+
+        draw_field(ax, h, title=title, title_color=tc, border_color=bc, lw=lw)
+
+    fig.subplots_adjust(wspace=0.35, bottom=0.08, top=0.92)
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out_path, dpi=FIG_DPI, bbox_inches="tight",
+                pad_inches=0.25, facecolor=BG)
+    plt.close(fig)
+    print(f"Saved → {out_path}")
+
+
 def plot_convergence(patterns_file: str, query_file: str,
                      noise: float, seed: int, max_iter: int,
-                     out_path: Path, mode: str = "sync"):
+                     out_path: Path, mode: str = "sync",
+                     show_fields: bool = True):
 
     stored = load_patterns(patterns_file)
     query  = load_query(query_file)
@@ -211,6 +321,21 @@ def plot_convergence(patterns_file: str, query_file: str,
     plt.close(fig)
     print(f"Saved → {out_path}")
 
+    # ── optional separate fields figure ──────────────────────────────────────
+    if show_fields:
+        fields_path = out_path.with_stem(out_path.stem + "_fields")
+        plot_fields(
+            net=net,
+            orig=orig,
+            update_states=update_states,
+            noise=noise,
+            n_flipped=n_flipped,
+            outcome=outcome,
+            label_str=label_str,
+            mode=mode,
+            out_path=fields_path,
+        )
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -232,6 +357,10 @@ def main():
         "--mode", choices=["sync", "async"], default="sync",
         help="Update mode: sync (all neurons at once) or async (one sweep = one step)",
     )
+    parser.add_argument(
+        "--no-fields", action="store_true",
+        help="Skip the separate local-field figure (saved as <out>_fields.png by default)",
+    )
     args = parser.parse_args()
 
     plot_convergence(
@@ -242,6 +371,7 @@ def main():
         max_iter=args.max_iter,
         out_path=Path(args.out),
         mode=args.mode,
+        show_fields=not args.no_fields,
     )
 
 
