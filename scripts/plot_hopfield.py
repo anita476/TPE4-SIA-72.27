@@ -8,8 +8,8 @@ showing the board state and energy at each stage:
 
 Usage
 ─────
-    python hopfield_convergence_plot.py <patterns_file> <query_letter> \
-        [--noise 0.2] [--seed 42] [--max-iter 20] [--out convergence.png]
+    python plot_hopfield.py <patterns_file> <query_file> \
+        [--noise 0.2] [--seed 42] [--max-iter 20] [--mode sync|async] [--out convergence.png]
 
     <query_letter>   name of the letter to query (must be in patterns_file)
 """
@@ -64,21 +64,42 @@ def build_net(stored: dict) -> HopfieldNetwork:
 
 
 def run_steps(net: HopfieldNetwork, initial: np.ndarray,
-              max_iter: int = 20) -> list[np.ndarray]:
-    """Return [initial, s1, s2, …] up to convergence."""
+              mode: str = "sync", max_iter: int = 20,
+              seed: int = None) -> list[np.ndarray]:
+    """Return [s(0), s(1), …] after each sync step or async sweep until convergence."""
     states = [initial.copy().astype(float)]
     s = states[0].copy()
-    s_pprev = None
-    for _ in range(max_iter):
-        s_prev = s.copy()
-        s = np.where(net.W @ s > 0, 1.0, -1.0)
-        if np.array_equal(s, s_prev):          # fixed point (already in states)
-            break
-        states.append(s.copy())
-        if s_pprev is not None and np.array_equal(s, s_pprev):  # 2-cycle
-            break
-        s_pprev = s_prev
-    return states
+
+    if mode == "sync":
+        s_pprev = None
+        for _ in range(max_iter):
+            s_prev = s.copy()
+            s = np.where(net.W @ s > 0, 1.0, -1.0)
+            states.append(s.copy())          # always record, even the converged copy
+            if np.array_equal(s, s_prev):    # period-1 fixed point
+                break
+            if s_pprev is not None and np.array_equal(s, s_pprev):  # period-2
+                break
+            s_pprev = s_prev
+        return states
+
+    if mode == "async":
+        rng = np.random.default_rng(seed)
+        for _ in range(max_iter):
+            order = rng.permutation(net.n)
+            changes = 0
+            for i in order:
+                h_i = float(net.W[i] @ s)
+                new_i = 1.0 if h_i > 0 else -1.0
+                if new_i != s[i]:
+                    s[i] = new_i
+                    changes += 1
+            states.append(s.copy())          # always record, even the 0-change sweep
+            if changes == 0:                 # fixed point confirmed
+                break
+        return states
+
+    raise ValueError(f"Unknown mode '{mode}'. Use 'sync' or 'async'.")
 
 
 def draw_cell(ax, state: np.ndarray, border_color: str = None,
@@ -106,7 +127,7 @@ def draw_cell(ax, state: np.ndarray, border_color: str = None,
 
 def plot_convergence(patterns_file: str, query_file: str,
                      noise: float, seed: int, max_iter: int,
-                     out_path: Path):
+                     out_path: Path, mode: str = "sync"):
 
     stored = load_patterns(patterns_file)
     query  = load_query(query_file)
@@ -123,11 +144,8 @@ def plot_convergence(patterns_file: str, query_file: str,
     noisy = add_noise(query, noise, seed=seed).flatten()
 
     # collect all update states
-    update_states = run_steps(net, noisy, max_iter)
-    n_updates = len(update_states) - 1
-    # duplicate final state to show fixed-point convergence (display only)
-    if n_updates >= 1:
-        update_states.append(update_states[-1].copy())
+    update_states = run_steps(net, noisy, mode=mode, max_iter=max_iter, seed=seed)
+    n_updates = len(update_states) - 1   # last state is the convergence-check copy
     outcome = classify_recovery(update_states[-1], orig, stored)
     border  = OUTCOME_COLOR[outcome]
 
@@ -174,11 +192,12 @@ def plot_convergence(patterns_file: str, query_file: str,
             bc, lw = C_NEUTRAL, 1.8
             tc, tw, ec = TITLE_COLOR, "normal", SUB_COLOR
         elif is_converged_copy:
-            title = f"t = {si}\n({OUTCOME_LABEL[outcome]})"
+            lbl = f"sweep {si}" if mode == "async" else f"t = {si}"
+            title = f"{lbl}\n({OUTCOME_LABEL[outcome]})"
             bc, lw = border, 3.0
             tc, tw, ec = border, "bold", border
         else:
-            title = f"t = {si}"
+            title = f"sweep {si}" if mode == "async" else f"t = {si}"
             bc, lw = "#888888", 1.8
             tc, tw, ec = TITLE_COLOR, "normal", SUB_COLOR
 
@@ -209,6 +228,10 @@ def main():
                         help="Max update iterations (default 20)")
     parser.add_argument("--out",      type=str,   default="convergence.png",
                         help="Output PNG path (default convergence.png)")
+    parser.add_argument(
+        "--mode", choices=["sync", "async"], default="sync",
+        help="Update mode: sync (all neurons at once) or async (one sweep = one step)",
+    )
     args = parser.parse_args()
 
     plot_convergence(
@@ -218,6 +241,7 @@ def main():
         seed=args.seed,
         max_iter=args.max_iter,
         out_path=Path(args.out),
+        mode=args.mode,
     )
 
 

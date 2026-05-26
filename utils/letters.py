@@ -204,7 +204,8 @@ def add_noise(pattern: np.ndarray, noise_pct: float, seed: int = None) -> np.nda
 
     flat = pattern.flatten().copy()
     n_flip = round(len(flat) * noise_pct)
-    flip_indices = rng.choice(len(flat), size=n_flip, replace=False)
-    flat[flip_indices] *= -1
+    if n_flip > 0:
+        flip_indices = rng.choice(len(flat), size=n_flip, replace=False)
+        flat[flip_indices] *= -1
 
     return flat.reshape(pattern.shape)

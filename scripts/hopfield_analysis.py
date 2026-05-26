@@ -141,10 +141,10 @@ def run_steps(net: HopfieldNetwork, initial: np.ndarray,
         for _ in range(max_iter):
             s_prev = s.copy()
             s = np.where(net.W @ s > 0, 1.0, -1.0)
-            if np.array_equal(s, s_prev):
+            states.append(s.copy())          # always record, even the converged copy
+            if np.array_equal(s, s_prev):    # period-1 fixed point
                 break
-            states.append(s.copy())
-            if s_pprev is not None and np.array_equal(s, s_pprev):
+            if s_pprev is not None and np.array_equal(s, s_pprev):  # period-2
                 break
             s_pprev = s_prev
         return states
@@ -160,9 +160,9 @@ def run_steps(net: HopfieldNetwork, initial: np.ndarray,
                 if new_i != s[i]:
                     s[i] = new_i
                     changes += 1
-            if changes == 0:
+            states.append(s.copy())          # always record, even the 0-change sweep
+            if changes == 0:                 # fixed point confirmed
                 break
-            states.append(s.copy())
         return states
 
     raise ValueError(f"Unknown mode '{mode}'.")
@@ -245,26 +245,6 @@ def plot_recovery_grid(stored: dict, noise: float, seeds: list, out: Path,
         draw_pattern(axes[i, 2], result, title="", energy=net.energy(result),
                      border_color=border, steps=n_steps)
 
-        # row label
-        axes[i, 0].text(-0.35, 2.5, name, fontsize=12, fontweight="bold",
-                         color=STYLE["text_title"], va="center",
-                         transform=axes[i, 0].transData)
-
-    # legend
-    from matplotlib.patches import Patch
-    legend_elements = [
-        Patch(facecolor=C_EXACT,     label="Exact match"),
-        Patch(facecolor=C_INVERSE,   label="Inverse of original"),
-        Patch(facecolor=C_WRONG, label="Wrong pattern"),
-        Patch(facecolor=C_SPURIOUS,  label="Spurious state"),
-    ]
-    fig.legend(handles=legend_elements, loc="lower center", ncol=4,
-               fontsize=8, framealpha=0.85,
-               bbox_to_anchor=(0.5, -0.02))
-
-    fig.suptitle(f"Recovery from noisy inputs  (noise = {noise:.0%})   {mode_tag(mode)}",
-                 fontsize=13, fontweight="bold",
-                 color=STYLE["text_title"], y=1.02)
     plt.tight_layout()
     save_fig(fig, out)
 
@@ -478,19 +458,13 @@ def plot_noise_robustness(stored: dict, out: Path,
     ax.set_facecolor(STYLE["axes_bg"])
     x = noise_levels * 100
     ax.stackplot(x, [exact_f, inverse_f, wrong_f, spurious_f],
-                 labels=["Exact match", "Inverse of original",
-                         "Wrong pattern", "Spurious state"],
                  colors=[C_EXACT, C_INVERSE, C_WRONG, C_SPURIOUS], alpha=0.85)
     ax.set_xlabel("Noise level (%)", color=STYLE["text_axis"])
     ax.set_ylabel("Fraction of trials", color=STYLE["text_axis"])
-    ax.set_title(f"Noise robustness — outcome distribution  "
-                 f"({n_trials} trials per level)   {mode_tag(mode)}",
-                 fontsize=13, fontweight="bold", color=STYLE["text_title"])
     ax.set_xlim(0, x[-1])
     ax.set_ylim(0, 1)
     ax.grid(color=STYLE["grid"], linestyle="--", linewidth=0.7,
             axis="y", alpha=0.5)
-    ax.legend(loc="upper right", fontsize=9, framealpha=0.85)
     plt.tight_layout()
     save_fig(fig, out)
 
