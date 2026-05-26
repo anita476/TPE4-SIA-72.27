@@ -116,6 +116,29 @@ def best_match(result: np.ndarray, stored: dict[str, np.ndarray]) -> tuple[str, 
     return best_name, similarity, is_inverse
 
 
+def classify_recovery(
+    result: np.ndarray, target: np.ndarray, stored: dict[str, np.ndarray],
+) -> str:
+    """
+    Classify recovery outcome.
+
+    - exact    : matches the target (original) pattern
+    - inverse  : inverse of the target pattern
+    - wrong    : matches a stored pattern but not the target (wrong pattern)
+    - spurious : does not match any stored pattern
+    """
+    r = np.asarray(result).flatten()
+    t = np.asarray(target).flatten()
+    if np.array_equal(r, t):
+        return "exact"
+    if np.array_equal(-r, t):
+        return "inverse"
+    _, sim, _ = best_match(r, stored)
+    if sim == 100.0:
+        return "wrong"
+    return "spurious"
+
+
 def group_analysis(letters):
     flat_letters = {
         k: m.flatten() for k, m in letters.items()

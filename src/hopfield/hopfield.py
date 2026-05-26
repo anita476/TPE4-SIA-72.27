@@ -3,7 +3,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 sys.stdout.reconfigure(encoding='utf-8')
 
-from utils.letters import load_letters, group_analysis, best_match, load_query, load_patterns, add_noise
+from utils.letters import (
+    load_letters, group_analysis, best_match, load_query, load_patterns,
+    add_noise, classify_recovery,
+)
 from utils.display_hopfield import print_pattern, print_separator
 from HopfieldNetwork import HopfieldNetwork
 import numpy as np
@@ -93,14 +96,17 @@ def main():
     print_pattern("result", result)
     print()
 
-    match, similarity, is_inverse = best_match(result, stored)
+    orig = query.flatten()
+    outcome = classify_recovery(result, orig, stored)
+    match, similarity, _ = best_match(result, stored)
 
-    if similarity == 100.0 and not is_inverse:
-        print(f"  Result                 : {match} exact match")
-    elif similarity == 100.0 and is_inverse:
-        print(f"  Result                 : -{match} converged to inverse of {match}")
-    else:
-        print(f"  Result                 : {match} spurious state ({similarity:.1f}% match with closest pattern)")
+    outcome_msg = {
+        "exact":    "exact recovery of original",
+        "inverse":  "inverse of original",
+        "wrong":    f"wrong pattern [{match}]",
+        "spurious": f"spurious state ({similarity:.1f}% match with [{match}])",
+    }
+    print(f"  Result                 : {outcome_msg[outcome]}")
 
     print(f"  Final energy           : {net.energy(result):.4f}")
     print_separator('═')

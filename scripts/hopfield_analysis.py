@@ -24,11 +24,10 @@ sys.stdout.reconfigure(encoding="utf-8")
 
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
 from matplotlib.colors import TwoSlopeNorm
 from sklearn.decomposition import PCA
 
-from utils.letters import load_patterns, load_letters, best_match
+from utils.letters import load_patterns, load_letters, best_match, classify_recovery
 from hopfield.HopfieldNetwork import HopfieldNetwork
 
 # ── Style ─────────────────────────────────────────────────────────────────────
@@ -63,9 +62,10 @@ PLOT_RC = {
     "ytick.color":       "#343434",
 }
 
-C_EXACT    = "#2ecc71"
-C_INVERSE  = "#e67e22"
-C_SPURIOUS = "#e74c3c"
+C_EXACT     = "#2ecc71"
+C_INVERSE   = "#e67e22"
+C_WRONG = "#d35400"
+C_SPURIOUS  = "#e74c3c"
 C_BLUE     = "#4a90d9"
 
 
@@ -126,13 +126,6 @@ def build_net(stored: dict) -> HopfieldNetwork:
     return net
 
 
-def classify(result: np.ndarray, stored: dict) -> str:
-    _, sim, is_inv = best_match(result, stored)
-    if sim == 100.0 and not is_inv:   return "exact"
-    if sim == 100.0 and is_inv:       return "inverse"
-    return "spurious"
-
-
 def run_steps(net: HopfieldNetwork, initial: np.ndarray,
               mode: str = "sync", max_iter: int = 20,
               seed: int = None) -> list:
@@ -191,8 +184,13 @@ def flip_noise(flat: np.ndarray, noise: float,
     return out
 
 
-OUTCOME_COLOR = {"exact": C_EXACT, "inverse": C_INVERSE, "spurious": C_SPURIOUS}
-OUTCOME_LS    = {"exact": "-",     "inverse": "--",       "spurious": ":"}
+OUTCOME_COLOR = {
+    "exact": C_EXACT, "inverse": C_INVERSE,
+    "wrong": C_WRONG, "spurious": C_SPURIOUS,
+}
+OUTCOME_LS = {
+    "exact": "-", "inverse": "--", "wrong": "-.", "spurious": ":",
+}
 
 
 # ── Plot 1: stored patterns ───────────────────────────────────────────────────
@@ -239,7 +237,7 @@ def plot_recovery_grid(stored: dict, noise: float, seeds: list, out: Path,
         states = run_steps(net, noisy, mode=mode, seed=seeds[i])
         result = states[-1]
         n_steps = len(states) - 1
-        outcome = classify(result, stored)
+        outcome = classify_recovery(result, pat, stored)
         border  = OUTCOME_COLOR[outcome]
 
         draw_pattern(axes[i, 0], pat,    title="")
@@ -255,11 +253,12 @@ def plot_recovery_grid(stored: dict, noise: float, seeds: list, out: Path,
     # legend
     from matplotlib.patches import Patch
     legend_elements = [
-        Patch(facecolor=C_EXACT,    label="Exact match"),
-        Patch(facecolor=C_INVERSE,  label="Inverse attractor"),
-        Patch(facecolor=C_SPURIOUS, label="Spurious state"),
+        Patch(facecolor=C_EXACT,     label="Exact match"),
+        Patch(facecolor=C_INVERSE,   label="Inverse of original"),
+        Patch(facecolor=C_WRONG, label="Wrong pattern"),
+        Patch(facecolor=C_SPURIOUS,  label="Spurious state"),
     ]
-    fig.legend(handles=legend_elements, loc="lower center", ncol=3,
+    fig.legend(handles=legend_elements, loc="lower center", ncol=4,
                fontsize=8, framealpha=0.85,
                bbox_to_anchor=(0.5, -0.02))
 
@@ -304,7 +303,7 @@ def plot_recovery_steps(stored: dict, query_name: str,
                               color=STYLE["text_title"], pad=4)
 
     for i, (noise, states, noisy) in enumerate(rows):
-        outcome = classify(states[-1], stored)
+        outcome = classify_recovery(states[-1], query, stored)
         border  = OUTCOME_COLOR[outcome]
 
         # col 0: original
@@ -345,12 +344,20 @@ def plot_spurious(stored: dict, query_name: str,
     rng    = np.random.default_rng(seed)
     noisy  = flip_noise(query.flatten(), noise, rng)
     result = net.predict(noisy, mode=mode, seed=seed, verbose=False)
-    match_name, sim, is_inv = best_match(result, stored)
+    match_name, sim, _ = best_match(result, stored)
+    outcome = classify_recovery(result, query, stored)
+    out_labels = {
+        "exact":     "Network output\n(exact recovery)",
+        "inverse":   "Network output\n(inverse of original)",
+        "wrong": f"Network output\n(wrong pattern: {match_name})",
+        "spurious":  "Network output\n(spurious state)",
+    }
 
     panels = [
         (query,              f"Original\n({query_name})",               None,                None),
         (noisy,              f"Noisy input\n({noise:.0%} noise)",        net.energy(noisy),   None),
-        (result,             "Network output\n(spurious state)",          net.energy(result),  C_SPURIOUS),
+        (result,             out_labels[outcome],                       net.energy(result),
+         OUTCOME_COLOR[outcome]),
         (stored[match_name], f"Closest stored\n({match_name}, {sim:.0f}% match)", None,        None),
     ]
 
@@ -359,7 +366,13 @@ def plot_spurious(stored: dict, query_name: str,
     for ax, (pat, label, energy, border) in zip(axes, panels):
         draw_pattern(ax, pat, title=label, energy=energy, border_color=border)
 
-    fig.suptitle(f"Spurious State — local energy minimum != any stored pattern   {mode_tag(mode)}",
+    titles = {
+        "spurious":  "Spurious state — not a stored pattern",
+        "wrong": "Wrong pattern — not the original",
+        "inverse":   "Inverse of original",
+        "exact":     "Exact recovery",
+    }
+    fig.suptitle(f"{titles[outcome]}   {mode_tag(mode)}",
                  fontsize=12, fontweight="bold", color=STYLE["text_title"], y=1.06)
     plt.tight_layout()
     save_fig(fig, out)
@@ -390,7 +403,7 @@ def plot_energy_convergence(stored: dict, query_name: str, out: Path,
                                 np.random.default_rng(base_seed))
             states = run_steps(net, noisy, mode=mode, seed=base_seed)
             all_curves.append([net.energy(s) for s in states])
-            outcomes.append(classify(states[-1], stored))
+            outcomes.append(classify_recovery(states[-1], query, stored))
 
         # pad to max length
         raw_steps = [len(c) - 1 for c in all_curves]   # steps per seed
@@ -424,7 +437,8 @@ def plot_energy_convergence(stored: dict, query_name: str, out: Path,
     ax.set_title(
         f"Energy convergence — query: {query_name}   {mode_tag(mode)}  "
         f"(mean +- std over {n_seeds} seeds)\n"
-        "line style:  solid = exact   dashed = inverse   dotted = spurious",
+        "line style:  solid = exact   dashed = inverse   "
+        "dash-dot = wrong pattern   dotted = spurious",
         fontsize=11, fontweight="bold", color=STYLE["text_title"],
     )
     ax.grid(color=STYLE["grid"], linestyle="--", linewidth=0.7)
@@ -444,27 +458,29 @@ def plot_noise_robustness(stored: dict, out: Path,
     pattern_list = list(stored.values())
     rng          = np.random.default_rng(0)
 
-    exact_f, inverse_f, spurious_f = [], [], []
+    exact_f, inverse_f, wrong_f, spurious_f = [], [], [], []
 
     for noise in noise_levels:
-        counts = {"exact": 0, "inverse": 0, "spurious": 0}
+        counts = {"exact": 0, "inverse": 0, "wrong": 0, "spurious": 0}
         for trial in range(n_trials):
             query  = pattern_list[trial % len(pattern_list)]
             flat   = flip_noise(query.flatten(), noise, rng)
             result = net.predict(flat, mode=mode, seed=trial, verbose=False)
-            counts[classify(result, stored)] += 1
+            counts[classify_recovery(result, query, stored)] += 1
         total = sum(counts.values())
-        exact_f.append(counts["exact"]    / total)
-        inverse_f.append(counts["inverse"] / total)
+        exact_f.append(counts["exact"]      / total)
+        inverse_f.append(counts["inverse"]  / total)
+        wrong_f.append(counts["wrong"] / total)
         spurious_f.append(counts["spurious"] / total)
 
     fig, ax = plt.subplots(figsize=FIG_SIZE, dpi=FIG_DPI,
                             facecolor=STYLE["figure_bg"])
     ax.set_facecolor(STYLE["axes_bg"])
     x = noise_levels * 100
-    ax.stackplot(x, [exact_f, inverse_f, spurious_f],
-                 labels=["Exact match", "Inverse attractor", "Spurious state"],
-                 colors=[C_EXACT, C_INVERSE, C_SPURIOUS], alpha=0.85)
+    ax.stackplot(x, [exact_f, inverse_f, wrong_f, spurious_f],
+                 labels=["Exact match", "Inverse of original",
+                         "Wrong pattern", "Spurious state"],
+                 colors=[C_EXACT, C_INVERSE, C_WRONG, C_SPURIOUS], alpha=0.85)
     ax.set_xlabel("Noise level (%)", color=STYLE["text_axis"])
     ax.set_ylabel("Fraction of trials", color=STYLE["text_axis"])
     ax.set_title(f"Noise robustness — outcome distribution  "

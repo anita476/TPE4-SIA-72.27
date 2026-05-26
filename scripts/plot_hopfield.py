@@ -18,7 +18,6 @@ import sys
 import argparse
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 from pathlib import Path
 
 # ── path setup ────────────────────────────────────────────────────────────────
@@ -27,7 +26,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 sys.stdout.reconfigure(encoding="utf-8")
 
-from utils.letters import load_patterns, load_query, best_match, add_noise
+from utils.letters import load_patterns, load_query, best_match, add_noise, classify_recovery
 from hopfield.HopfieldNetwork import HopfieldNetwork
 
 BG        = "#fff5ec"
@@ -35,12 +34,20 @@ CELL_ON   = "#343434"
 CELL_OFF  = BG
 GRID_COL  = "#aaaaaa"
 
-C_EXACT    = "#2ecc71"
-C_INVERSE  = "#e67e22"
+C_EXACT     = "#2ecc71"
+C_INVERSE   = "#e67e22"
+C_WRONG    = "#d35400"
 C_SPURIOUS = "#e74c3c"
 C_NEUTRAL  = "#4a90d9"   # original & noisy frames
 
-OUTCOME_COLOR = {"exact": C_EXACT, "inverse": C_INVERSE, "spurious": C_SPURIOUS}
+OUTCOME_COLOR = {
+    "exact": C_EXACT, "inverse": C_INVERSE,
+    "wrong": C_WRONG, "spurious": C_SPURIOUS,
+}
+OUTCOME_LABEL = {
+    "exact": "exact", "inverse": "inverse",
+    "wrong": "wrong pattern", "spurious": "spurious",
+}
 
 TITLE_COLOR = "#343434"
 SUB_COLOR   = "#555555"
@@ -72,13 +79,6 @@ def run_steps(net: HopfieldNetwork, initial: np.ndarray,
             break
         s_pprev = s_prev
     return states
-
-
-def classify(result: np.ndarray, stored: dict) -> str:
-    _, sim, is_inv = best_match(result, stored)
-    if sim == 100.0 and not is_inv:  return "exact"
-    if sim == 100.0 and is_inv:      return "inverse"
-    return "spurious"
 
 
 def draw_cell(ax, state: np.ndarray, border_color: str = None,
@@ -128,7 +128,7 @@ def plot_convergence(patterns_file: str, query_file: str,
     # duplicate final state to show fixed-point convergence (display only)
     if n_updates >= 1:
         update_states.append(update_states[-1].copy())
-    outcome = classify(update_states[-1], stored)
+    outcome = classify_recovery(update_states[-1], orig, stored)
     border  = OUTCOME_COLOR[outcome]
 
     # columns: original | t=0 (noisy, fed in) | t=1 | … | t=N
@@ -174,7 +174,7 @@ def plot_convergence(patterns_file: str, query_file: str,
             bc, lw = C_NEUTRAL, 1.8
             tc, tw, ec = TITLE_COLOR, "normal", SUB_COLOR
         elif is_converged_copy:
-            title = f"t = {si}\n({outcome})"
+            title = f"t = {si}\n({OUTCOME_LABEL[outcome]})"
             bc, lw = border, 3.0
             tc, tw, ec = border, "bold", border
         else:
@@ -184,39 +184,7 @@ def plot_convergence(patterns_file: str, query_file: str,
 
         _annotate_panel(ax, state, title, tc, tw, bc, lw, e, ec)
 
-    fig.subplots_adjust(wspace=0.35, bottom=0.26, top=0.78)
-
-    _, sim, is_inv = best_match(update_states[-1], stored)
-    match_name, _, _ = best_match(update_states[-1], stored)
-    outcome_str = {
-        "exact":    f"exact recovery of [{match_name}]",
-        "inverse":  f"inverse of [{match_name}]",
-        "spurious": f"spurious state ({sim:.0f}% sim. to [{match_name}])",
-    }[outcome]
-
-    fig.suptitle(
-        f"Hopfield convergence  ·  query [{label_str}]  ·  "
-        f"noise {noise:.0%}  ·  seed {seed}  ·  "
-        f"converged in {n_updates} step(s)  →  {outcome_str}",
-        fontsize=9, color=TITLE_COLOR, y=1.04,
-    )
-
-    legend_patches = [
-        mpatches.Patch(facecolor=C_NEUTRAL,  label="Original / fed-in state"),
-        mpatches.Patch(facecolor=C_EXACT,    label="Exact recovery"),
-        mpatches.Patch(facecolor=C_INVERSE,  label="Inverse attractor"),
-        mpatches.Patch(facecolor=C_SPURIOUS, label="Spurious state"),
-    ]
-    fig.legend(
-        handles=legend_patches,
-        loc="lower center",
-        ncol=4,
-        fontsize=8,
-        framealpha=0.7,
-        facecolor=BG,
-        edgecolor="#cccccc",
-        bbox_to_anchor=(0.5, 0.02),
-    )
+    fig.subplots_adjust(wspace=0.35, bottom=0.14, top=0.92)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, dpi=FIG_DPI, bbox_inches="tight",

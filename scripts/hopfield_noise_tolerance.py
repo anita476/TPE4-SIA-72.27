@@ -1,10 +1,13 @@
 """
-    Each individual trial
-    is always a binary outcome, exact recovery or not.
-    The cliff is therefore
-    defined as the noise level where the fraction of correct trials first drops
-    below 50%, ie:
-     correct recovery becomes less likely than not
+Hopfield noise-tolerance analysis per stored pattern.
+
+Outcomes (same as plot_hopfield / hopfield_analysis):
+  exact     — recovered the original pattern
+  inverse   — inverse of the original
+  wrong     — converged to a different stored pattern (wrong pattern)
+  spurious  — not any stored pattern
+
+Cliff = first noise level where exact-recovery fraction drops below 50%.
 """
 
 import sys
@@ -15,34 +18,35 @@ import matplotlib.colors as mcolors
 import matplotlib.ticker as mticker
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "src"))
 
-from utils.letters import load_patterns, add_noise, best_match
+from utils.letters import load_patterns, add_noise, classify_recovery
 from hopfield.HopfieldNetwork import HopfieldNetwork
 
-BG_COLOR = '#fff5ec'
-C_CORRECT  = '#1D9E75'
-C_INVERSE  = '#378ADD'
-C_SPURIOUS = '#D85A30'
-C_THRESH   = '#76373b'
+BG_COLOR    = '#fff5ec'
+C_EXACT     = '#2ecc71'
+C_INVERSE   = '#e67e22'
+C_WRONG = '#d35400'
+C_SPURIOUS  = '#e74c3c'
+C_THRESH    = '#76373b'
 
-CLIFF_THRESHOLD = 0.5  # crossover: correct recovery becomes less likely than not
+CLIFF_THRESHOLD = 0.5  # exact recovery becomes less likely than not
 
 
-def run_trial(net, query_flat, noise_pct, seed):
+def run_trial(net, query_flat, stored, noise_pct, seed, max_iter=20, mode="sync"):
     noisy = add_noise(
         query_flat.reshape(5, 5),
         noise_pct,
-        seed=seed
+        seed=seed,
     ).flatten()
-    result = net.predict(noisy, max_iterations=20, verbose=False)
-    if np.array_equal(result, query_flat):
-        return "correct"
-    if np.array_equal(result, -query_flat):
-        return "inverse"
-    return "spurious"
+    result = net.predict(noisy, mode=mode, max_iterations=max_iter, verbose=False,
+                         seed=seed)
+    return classify_recovery(result, query_flat, stored)
 
-def analyse(patterns_file, noise_steps=20, trials=30, max_iter=20, seed=42):
+def analyse(patterns_file, noise_steps=20, trials=30, max_iter=20, seed=42,
+            mode="sync"):
     stored = load_patterns(patterns_file)
     if not stored:
         raise ValueError(f"No patterns found in {patterns_file}")
@@ -58,10 +62,13 @@ def analyse(patterns_file, noise_steps=20, trials=30, max_iter=20, seed=42):
         flat = pat.flatten()
         results[name] = []
         for ni, noise_pct in enumerate(noise_levels):
-            counts = {"correct": 0, "inverse": 0, "spurious": 0}
+            counts = {"exact": 0, "inverse": 0, "wrong": 0, "spurious": 0}
             for t in range(trials):
-                outcome = run_trial(net, flat, noise_pct,
-                                    seed=seed + ni * 1000 + t)
+                outcome = run_trial(
+                    net, flat, stored, noise_pct,
+                    seed=seed + ni * 1000 + t,
+                    max_iter=max_iter, mode=mode,
+                )
                 counts[outcome] += 1
             results[name].append(counts)
 
@@ -69,10 +76,10 @@ def analyse(patterns_file, noise_steps=20, trials=30, max_iter=20, seed=42):
 
 
 def cliff_level(pat_data, noise_levels):
-    """First noise level where correct-trial fraction drops below 50%."""
+    """First noise level where exact-recovery fraction drops below 50%."""
     for ni, counts in enumerate(pat_data):
         total = sum(counts.values()) or 1
-        if counts["correct"] / total < CLIFF_THRESHOLD:
+        if counts["exact"] / total < CLIFF_THRESHOLD:
             return noise_levels[ni]
     return noise_levels[-1]
 
@@ -95,16 +102,17 @@ def plot_stacked_areas(results, noise_levels, trials, out_path):
     for pi, (ax, name) in enumerate(zip(axes, names)):
         ax.set_facecolor(BG_COLOR)
 
-        correct_pct  = np.array([c["correct"]  / trials * 100 for c in results[name]])
-        inverse_pct  = np.array([c["inverse"]  / trials * 100 for c in results[name]])
-        spurious_pct = np.array([c["spurious"] / trials * 100 for c in results[name]])
+        exact_pct     = np.array([c["exact"]      / trials * 100 for c in results[name]])
+        inverse_pct   = np.array([c["inverse"]    / trials * 100 for c in results[name]])
+        wrong_pct = np.array([c["wrong"] / trials * 100 for c in results[name]])
+        spurious_pct  = np.array([c["spurious"]   / trials * 100 for c in results[name]])
         x = noise_levels * 100
 
         ax.stackplot(
             x,
-            correct_pct, inverse_pct, spurious_pct,
-            labels=["Correct", "Inverse", "Spurious"],
-            colors=[C_CORRECT, C_INVERSE, C_SPURIOUS],
+            exact_pct, inverse_pct, wrong_pct, spurious_pct,
+            labels=["Exact", "Inverse", "Wrong pattern", "Spurious"],
+            colors=[C_EXACT, C_INVERSE, C_WRONG, C_SPURIOUS],
             alpha=0.88,
         )
 
@@ -115,10 +123,10 @@ def plot_stacked_areas(results, noise_levels, trials, out_path):
         ax.text(cliff * 100 + 1, 92, f"cliff {cliff*100:.0f}%",
                 color=C_THRESH, fontsize=8, va='top')
 
-        # label correct % at three key points: start, cliff, end
+        # label exact % at three key points: start, cliff, end
         key_indices = sorted({0, cliff_idx, len(noise_levels) - 1})
         for ki in key_indices:
-            cp = correct_pct[ki]
+            cp = exact_pct[ki]
             if cp < 8:
                 continue
             ax.text(x[ki], cp / 2, f"{cp:.0f}%",
@@ -140,14 +148,14 @@ def plot_stacked_areas(results, noise_levels, trials, out_path):
         if pi == 0:
             ax.legend(loc='upper right', fontsize=8, framealpha=0.6,
                       facecolor=BG_COLOR, edgecolor='#ddd',
-                      ncol=3, handlelength=1.2)
+                      ncol=4, handlelength=1.2)
 
     axes[-1].set_xlabel("Noise level", fontsize=8, color='#666')
     axes[-1].xaxis.set_major_formatter(mticker.PercentFormatter())
 
     fig.suptitle(
         f"Hopfield noise-tolerance  ·  {trials} trials/point  ·  "
-        f"cliff = first noise level where correct recovery < 50%",
+        f"cliff = first noise level where exact recovery < 50%",
         fontsize=10, color='#444',
     )
     plt.tight_layout()
@@ -162,12 +170,12 @@ def plot_heatmap(results, noise_levels, trials, out_path):
     n_noise = len(noise_levels)
 
     matrix = np.array([
-        [results[name][ni]["correct"] / trials for ni in range(n_noise)]
+        [results[name][ni]["exact"] / trials for ni in range(n_noise)]
         for name in names
     ])
 
     cmap = mcolors.LinearSegmentedColormap.from_list(
-        "tol", [C_SPURIOUS, '#FAC775', C_CORRECT], N=256
+        "tol", [C_SPURIOUS, '#FAC775', C_EXACT], N=256
     )
 
     cell_h = 1.2
@@ -207,10 +215,10 @@ def plot_heatmap(results, noise_levels, trials, out_path):
     cbar = fig.colorbar(mesh, ax=ax, orientation='vertical',
                         fraction=0.015, pad=0.02)
     cbar.ax.tick_params(labelsize=7)
-    cbar.set_label("correct recovery rate", fontsize=8)
+    cbar.set_label("exact recovery rate", fontsize=8)
 
     ax.set_title(
-        f"Correct-recovery rate per pattern  ·  {trials} trials/point",
+        f"Exact-recovery rate per pattern  ·  {trials} trials/point",
         fontsize=10, color='#444', pad=8,
     )
     for spine in ax.spines.values():
@@ -230,6 +238,10 @@ def main():
     parser.add_argument("--seed",        type=int, default=42)
     parser.add_argument("--out-dir",     type=str, default=".",
                         help="Directory to write PNGs into (default: current dir)")
+    parser.add_argument(
+        "--mode", choices=["sync", "async"], default="sync",
+        help="Hopfield update mode (default: sync)",
+    )
     args = parser.parse_args()
 
     out_dir = Path(args.out_dir)
@@ -242,6 +254,7 @@ def main():
         trials=args.trials,
         max_iter=args.max_iter,
         seed=args.seed,
+        mode=args.mode,
     )
 
     plot_stacked_areas(results, noise_levels, args.trials,
