@@ -83,7 +83,7 @@ def save_fig(fig, path: Path):
 
 def draw_pattern(ax, pattern: np.ndarray, title: str = "",
                  energy: float = None, border_color: str = None,
-                 title_fontsize: int = 9):
+                 title_fontsize: int = 9, steps: int = None):
     """Draw a +-1 pattern (flat or 5x5) as a pixel grid on *ax*."""
     grid = np.array(pattern).flatten().reshape(5, 5)
     ax.set_xlim(0, 5);  ax.set_ylim(0, 5)
@@ -107,7 +107,11 @@ def draw_pattern(ax, pattern: np.ndarray, title: str = "",
         else:
             spine.set_visible(False)
 
-    label = title + (f"\nE={energy:.2f}" if energy is not None else "")
+    label = title
+    if energy is not None:
+        label += f"\nE={energy:.2f}"
+    if steps is not None:
+        label += f"\n{steps} step{'s' if steps != 1 else ''}"
     if label.strip():
         ax.set_title(label, fontsize=title_fontsize,
                      color=STYLE["text_title"], pad=3)
@@ -128,21 +132,50 @@ def classify(result: np.ndarray, stored: dict) -> str:
 
 
 def run_steps(net: HopfieldNetwork, initial: np.ndarray,
-              max_iter: int = 20) -> list:
-    """Return [initial, t1, t2, ...] until convergence (period-1 or period-2)."""
+              mode: str = "sync", max_iter: int = 20,
+              seed: int = None) -> list:
+    """
+    Return [s(0), s(1), s(2), ...] capturing the state after each step
+    (synchronous step or async sweep) until convergence.
+    """
     states = [initial.copy().astype(float)]
     s = states[0].copy()
-    s_pprev = None
-    for _ in range(max_iter):
-        s_prev = s.copy()
-        s = np.where(net.W @ s > 0, 1.0, -1.0)
-        states.append(s.copy())
-        if np.array_equal(s, s_prev):
-            break
-        if s_pprev is not None and np.array_equal(s, s_pprev):
-            break
-        s_pprev = s_prev
-    return states
+
+    if mode == "sync":
+        s_pprev = None
+        for _ in range(max_iter):
+            s_prev = s.copy()
+            s = np.where(net.W @ s > 0, 1.0, -1.0)
+            states.append(s.copy())
+            if np.array_equal(s, s_prev):
+                break
+            if s_pprev is not None and np.array_equal(s, s_pprev):
+                break
+            s_pprev = s_prev
+        return states
+
+    if mode == "async":
+        rng = np.random.default_rng(seed)
+        for _ in range(max_iter):
+            order   = rng.permutation(net.n)
+            changes = 0
+            for i in order:
+                h_i   = float(net.W[i] @ s)
+                new_i = 1.0 if h_i > 0 else -1.0
+                if new_i != s[i]:
+                    s[i] = new_i
+                    changes += 1
+            states.append(s.copy())
+            if changes == 0:
+                break
+        return states
+
+    raise ValueError(f"Unknown mode '{mode}'.")
+
+
+def mode_tag(mode: str) -> str:
+    """Small badge used in plot titles."""
+    return f"[mode: {mode}]"
 
 
 def flip_noise(flat: np.ndarray, noise: float,
@@ -177,7 +210,8 @@ def plot_stored_patterns(stored: dict, out: Path):
 
 # ── Plot 2: recovery grid — all patterns × (original / noisy / recovered) ────
 
-def plot_recovery_grid(stored: dict, noise: float, seeds: list, out: Path):
+def plot_recovery_grid(stored: dict, noise: float, seeds: list, out: Path,
+                        mode: str = "sync"):
     """
     Grid with one row per stored pattern.
     Columns: original  |  noisy  |  recovered
@@ -197,16 +231,18 @@ def plot_recovery_grid(stored: dict, noise: float, seeds: list, out: Path):
                               color=STYLE["text_title"], pad=6)
 
     for i, (name, pat) in enumerate(stored.items()):
-        rng   = np.random.default_rng(seeds[i])
-        noisy = flip_noise(pat.flatten(), noise, rng)
-        result = net.predict(noisy, verbose=False)
+        rng    = np.random.default_rng(seeds[i])
+        noisy  = flip_noise(pat.flatten(), noise, rng)
+        states = run_steps(net, noisy, mode=mode, seed=seeds[i])
+        result = states[-1]
+        n_steps = len(states) - 1
         outcome = classify(result, stored)
         border  = OUTCOME_COLOR[outcome]
 
-        draw_pattern(axes[i, 0], pat,    title="" if i else "")
+        draw_pattern(axes[i, 0], pat,    title="")
         draw_pattern(axes[i, 1], noisy,  title="", energy=net.energy(noisy))
         draw_pattern(axes[i, 2], result, title="", energy=net.energy(result),
-                     border_color=border)
+                     border_color=border, steps=n_steps)
 
         # row label
         axes[i, 0].text(-0.35, 2.5, name, fontsize=12, fontweight="bold",
@@ -224,7 +260,7 @@ def plot_recovery_grid(stored: dict, noise: float, seeds: list, out: Path):
                fontsize=8, framealpha=0.85,
                bbox_to_anchor=(0.5, -0.02))
 
-    fig.suptitle(f"Recovery from noisy inputs  (noise = {noise:.0%})",
+    fig.suptitle(f"Recovery from noisy inputs  (noise = {noise:.0%})   {mode_tag(mode)}",
                  fontsize=13, fontweight="bold",
                  color=STYLE["text_title"], y=1.02)
     plt.tight_layout()
@@ -234,7 +270,8 @@ def plot_recovery_grid(stored: dict, noise: float, seeds: list, out: Path):
 # ── Plot 3: step-by-step recovery at 3 noise levels ──────────────────────────
 
 def plot_recovery_steps(stored: dict, query_name: str,
-                         noise_levels: list, seeds: list, out: Path):
+                         noise_levels: list, seeds: list, out: Path,
+                         mode: str = "sync"):
     apply_style()
     net   = build_net(stored)
     query = stored[query_name]
@@ -244,12 +281,12 @@ def plot_recovery_steps(stored: dict, query_name: str,
     for noise, seed in zip(noise_levels, seeds):
         rng    = np.random.default_rng(seed)
         noisy  = flip_noise(query.flatten(), noise, rng)
-        states = run_steps(net, noisy)
+        states = run_steps(net, noisy, mode=mode, seed=seed)
         rows.append((noise, states, noisy))
 
-    # fixed column count: original + noisy + up to 4 steps
-    MAX_EXTRA = 4
-    ncols = 2 + MAX_EXTRA  # original | noisy | t=1 … t=4
+    # fixed column count: original + noisy + up to MAX_EXTRA steps
+    MAX_EXTRA = max(4, max(len(s) - 1 for _, s, _ in rows))
+    ncols = 2 + MAX_EXTRA  # original | noisy | t=1 … t=MAX_EXTRA
 
     nrows = len(rows)
     fig, axes = plt.subplots(nrows, ncols,
@@ -280,12 +317,14 @@ def plot_recovery_steps(stored: dict, query_name: str,
                          title="", energy=net.energy(states[idx]),
                          border_color=bc)
 
-        # row label on the left
-        axes[i, 0].text(-0.35, 2.5, f"{noise:.0%}", fontsize=10,
+        # row label on the left: noise% + step count
+        n_steps = len(states) - 1
+        step_label = f"{noise:.0%}\n({n_steps} step{'s' if n_steps != 1 else ''})"
+        axes[i, 0].text(-0.35, 2.5, step_label, fontsize=9,
                          fontweight="bold", color=STYLE["text_title"],
-                         va="center", transform=axes[i, 0].transData)
+                         va="center", ha="right", transform=axes[i, 0].transData)
 
-    fig.suptitle(f"Step-by-step recovery — query: {query_name}",
+    fig.suptitle(f"Step-by-step recovery — query: {query_name}   {mode_tag(mode)}",
                  fontsize=13, fontweight="bold",
                  color=STYLE["text_title"], y=1.02)
     plt.tight_layout()
@@ -295,13 +334,14 @@ def plot_recovery_steps(stored: dict, query_name: str,
 # ── Plot 4: spurious state ────────────────────────────────────────────────────
 
 def plot_spurious(stored: dict, query_name: str,
-                   noise: float, seed: int, out: Path):
+                   noise: float, seed: int, out: Path,
+                   mode: str = "sync"):
     apply_style()
     net    = build_net(stored)
     query  = stored[query_name]
     rng    = np.random.default_rng(seed)
     noisy  = flip_noise(query.flatten(), noise, rng)
-    result = net.predict(noisy, verbose=False)
+    result = net.predict(noisy, mode=mode, seed=seed, verbose=False)
     match_name, sim, is_inv = best_match(result, stored)
 
     panels = [
@@ -316,7 +356,7 @@ def plot_spurious(stored: dict, query_name: str,
     for ax, (pat, label, energy, border) in zip(axes, panels):
         draw_pattern(ax, pat, title=label, energy=energy, border_color=border)
 
-    fig.suptitle("Spurious State — local energy minimum != any stored pattern",
+    fig.suptitle(f"Spurious State — local energy minimum != any stored pattern   {mode_tag(mode)}",
                  fontsize=12, fontweight="bold", color=STYLE["text_title"], y=1.06)
     plt.tight_layout()
     save_fig(fig, out)
@@ -325,7 +365,7 @@ def plot_spurious(stored: dict, query_name: str,
 # ── Plot 5: energy convergence (multi-seed, mean +- std) ─────────────────────
 
 def plot_energy_convergence(stored: dict, query_name: str, out: Path,
-                             n_seeds: int = 15):
+                             n_seeds: int = 15, mode: str = "sync"):
     apply_style()
     net   = build_net(stored)
     query = stored[query_name]
@@ -342,13 +382,16 @@ def plot_energy_convergence(stored: dict, query_name: str, out: Path,
         all_curves = []
         outcomes   = []
         for seed in range(n_seeds):
+            noisy_seed = seed * 100 + int(noise * 10)
             noisy  = flip_noise(query.flatten(), noise,
-                                np.random.default_rng(seed * 100 + int(noise * 10)))
-            states = run_steps(net, noisy)
+                                np.random.default_rng(noisy_seed))
+            states = run_steps(net, noisy, mode=mode, seed=noisy_seed)
             all_curves.append([net.energy(s) for s in states])
             outcomes.append(classify(states[-1], stored))
 
         # pad to max length
+        raw_steps = [len(c) - 1 for c in all_curves]   # steps per seed
+        avg_steps = float(np.mean(raw_steps))
         max_len = max(len(c) for c in all_curves)
         padded  = [c + [c[-1]] * (max_len - len(c)) for c in all_curves]
         arr     = np.array(padded)
@@ -358,17 +401,25 @@ def plot_energy_convergence(stored: dict, query_name: str, out: Path,
         # outcome for color of line style: use majority vote
         majority = max(set(outcomes), key=outcomes.count)
         ls = OUTCOME_LS[majority]
-        xs = range(max_len)
+        xs = list(range(max_len))
 
         ax.plot(xs, mean, linestyle=ls, color=color, linewidth=1.8,
                 marker="o", markersize=3, label=f"{noise:.0%}")
         ax.fill_between(xs, mean - std, mean + std,
                         color=color, alpha=0.15)
 
-    ax.set_xlabel("Iteration", color=STYLE["text_axis"])
+        # annotate mean step count at the end of the curve
+        ax.annotate(
+            f"  {avg_steps:.1f}",
+            xy=(xs[-1], mean[-1]),
+            fontsize=7, color=color, va="center",
+        )
+
+    ax.set_xlabel("Iteration" if mode == "sync" else "Sweep",
+                  color=STYLE["text_axis"])
     ax.set_ylabel("Energy  E(s)", color=STYLE["text_axis"])
     ax.set_title(
-        f"Energy convergence — query: {query_name}  "
+        f"Energy convergence — query: {query_name}   {mode_tag(mode)}  "
         f"(mean +- std over {n_seeds} seeds)\n"
         "line style:  solid = exact   dashed = inverse   dotted = spurious",
         fontsize=11, fontweight="bold", color=STYLE["text_title"],
@@ -383,7 +434,7 @@ def plot_energy_convergence(stored: dict, query_name: str, out: Path,
 # ── Plot 6: noise robustness (stacked, multi-seed avg) ───────────────────────
 
 def plot_noise_robustness(stored: dict, out: Path,
-                           n_trials: int = 250):
+                           n_trials: int = 250, mode: str = "sync"):
     apply_style()
     net          = build_net(stored)
     noise_levels = np.arange(0.0, 0.96, 0.04)
@@ -397,7 +448,7 @@ def plot_noise_robustness(stored: dict, out: Path,
         for trial in range(n_trials):
             query  = pattern_list[trial % len(pattern_list)]
             flat   = flip_noise(query.flatten(), noise, rng)
-            result = net.predict(flat, verbose=False)
+            result = net.predict(flat, mode=mode, seed=trial, verbose=False)
             counts[classify(result, stored)] += 1
         total = sum(counts.values())
         exact_f.append(counts["exact"]    / total)
@@ -413,7 +464,8 @@ def plot_noise_robustness(stored: dict, out: Path,
                  colors=[C_EXACT, C_INVERSE, C_SPURIOUS], alpha=0.85)
     ax.set_xlabel("Noise level (%)", color=STYLE["text_axis"])
     ax.set_ylabel("Fraction of trials", color=STYLE["text_axis"])
-    ax.set_title(f"Noise robustness — outcome distribution  ({n_trials} trials per level)",
+    ax.set_title(f"Noise robustness — outcome distribution  "
+                 f"({n_trials} trials per level)   {mode_tag(mode)}",
                  fontsize=13, fontweight="bold", color=STYLE["text_title"])
     ax.set_xlim(0, x[-1])
     ax.set_ylim(0, 1)
@@ -459,7 +511,8 @@ def plot_overlap_matrix(stored: dict, out: Path):
 # ── Plot 8: basin of attraction per pattern (mean +- std) ────────────────────
 
 def plot_basin_by_pattern(stored: dict, out: Path,
-                           n_seeds: int = 10, n_trials: int = 60):
+                           n_seeds: int = 10, n_trials: int = 60,
+                           mode: str = "sync"):
     apply_style()
     net          = build_net(stored)
     noise_levels = np.arange(0.0, 0.96, 0.05)
@@ -472,13 +525,15 @@ def plot_basin_by_pattern(stored: dict, out: Path,
     for (name, query), color in zip(stored.items(), colors):
         seed_rates = []
         for seed in range(n_seeds):
-            rng   = np.random.default_rng(seed * 7 + 13)
+            rng       = np.random.default_rng(seed * 7 + 13)
+            async_sd  = seed * 7 + 13
             rates = []
             for noise in noise_levels:
                 correct = 0
-                for _ in range(n_trials):
+                for trial in range(n_trials):
                     flat   = flip_noise(query.flatten(), noise, rng)
-                    result = net.predict(flat, verbose=False)
+                    result = net.predict(flat, mode=mode,
+                                          seed=async_sd + trial, verbose=False)
                     mn, sim, is_inv = best_match(result, stored)
                     if sim == 100.0 and not is_inv and mn == name:
                         correct += 1
@@ -501,7 +556,7 @@ def plot_basin_by_pattern(stored: dict, out: Path,
     ax.set_ylabel("Exact recovery rate", color=STYLE["text_axis"])
     ax.set_title(
         f"Basin of attraction per pattern  "
-        f"(mean +- std, {n_seeds} seeds x {n_trials} trials)",
+        f"(mean +- std, {n_seeds} seeds x {n_trials} trials)   {mode_tag(mode)}",
         fontsize=13, fontweight="bold", color=STYLE["text_title"],
     )
     ax.set_xlim(0, 95);  ax.set_ylim(-0.05, 1.05)
@@ -515,7 +570,7 @@ def plot_basin_by_pattern(stored: dict, out: Path,
 
 def plot_capacity_experiment(all_letters: dict, out: Path,
                               n_subsets: int = 20, n_trials: int = 60,
-                              noise: float = 0.2):
+                              noise: float = 0.2, mode: str = "sync"):
     """
     For each P in 1..max_P, randomly draw P letters, train Hopfield,
     measure recovery rate. Repeat n_subsets times and plot mean +- std.
@@ -531,6 +586,7 @@ def plot_capacity_experiment(all_letters: dict, out: Path,
 
     mean_rates, std_rates = [], []
     rng = np.random.default_rng(99)
+    trial_counter = 0
 
     for P in sizes:
         subset_rates = []
@@ -542,7 +598,9 @@ def plot_capacity_experiment(all_letters: dict, out: Path,
             for __ in range(n_trials):
                 name   = chosen[rng.integers(P)]
                 flat   = flip_noise(stored[name].flatten(), noise, rng)
-                result = net.predict(flat, verbose=False)
+                result = net.predict(flat, mode=mode,
+                                     seed=trial_counter, verbose=False)
+                trial_counter += 1
                 mn, sim, is_inv = best_match(result, stored)
                 if sim == 100.0 and not is_inv and mn == name:
                     correct += 1
@@ -571,7 +629,7 @@ def plot_capacity_experiment(all_letters: dict, out: Path,
     ax.set_ylabel("Exact recovery rate", color=STYLE["text_axis"])
     ax.set_title(
         f"Capacity experiment  (N=25 neurons, noise={noise:.0%}, "
-        f"{n_subsets} random subsets x {n_trials} trials each)",
+        f"{n_subsets} random subsets x {n_trials} trials each)   {mode_tag(mode)}",
         fontsize=12, fontweight="bold", color=STYLE["text_title"],
     )
     ax.set_xlim(0.5, max_P + 0.5)
@@ -586,11 +644,23 @@ def plot_capacity_experiment(all_letters: dict, out: Path,
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(
+        description="Generate Hopfield network analysis plots."
+    )
+    parser.add_argument(
+        "--mode", choices=["sync", "async"], default="sync",
+        help="Update mode: 'sync' (default) or 'async'. "
+             "Outputs go to results/hopfield/<mode>/",
+    )
+    args = parser.parse_args()
+    mode = args.mode
+
     apply_style()
 
     patterns_file = ROOT / "data" / "patterns_worst.txt"
     letters_file  = ROOT / "data" / "letters.txt"
-    out_dir       = ROOT / "results" / "hopfield"
+    out_dir       = ROOT / "results" / "hopfield" / mode
 
     stored      = load_patterns(str(patterns_file))
     all_letters = load_letters(str(letters_file))
@@ -599,6 +669,7 @@ def main():
     print(f"Stored patterns : {list(stored.keys())}")
     print(f"Query           : {query_name}")
     print(f"All letters     : {len(all_letters)}")
+    print(f"Mode            : {mode}")
     print(f"Output          : {out_dir}\n")
 
     plot_stored_patterns(stored,
@@ -606,30 +677,30 @@ def main():
 
     plot_recovery_grid(stored, noise=0.2,
         seeds=[7, 14, 21, 28],
-        out=out_dir / "2_recovery_grid.png")
+        out=out_dir / "2_recovery_grid.png", mode=mode)
 
     plot_recovery_steps(stored, query_name,
         noise_levels=[0.2, 0.4, 0.6],
         seeds=[7, 14, 42],
-        out=out_dir / "3_recovery_steps.png")
+        out=out_dir / "3_recovery_steps.png", mode=mode)
 
     plot_spurious(stored, query_name, noise=0.6, seed=42,
-        out=out_dir / "4_spurious_state.png")
+        out=out_dir / "4_spurious_state.png", mode=mode)
 
     plot_energy_convergence(stored, query_name,
-        out=out_dir / "5_energy_convergence.png")
+        out=out_dir / "5_energy_convergence.png", mode=mode)
 
     plot_noise_robustness(stored,
-        out=out_dir / "6_noise_robustness.png")
+        out=out_dir / "6_noise_robustness.png", mode=mode)
 
     plot_overlap_matrix(stored,
         out=out_dir / "7_overlap_matrix.png")
 
     plot_basin_by_pattern(stored,
-        out=out_dir / "8_basin_by_pattern.png")
+        out=out_dir / "8_basin_by_pattern.png", mode=mode)
 
     plot_capacity_experiment(all_letters,
-        out=out_dir / "9_capacity_experiment.png")
+        out=out_dir / "9_capacity_experiment.png", mode=mode)
 
     print("\nDone.")
 
