@@ -33,6 +33,11 @@ def main():
     parser.add_argument("--noise", type=float, default=0.2)
     parser.add_argument("--seed", help="Seed for reproducibility", type=int)
     parser.add_argument(
+        "--mode", choices=["sync", "async"], default="sync",
+        help="Update mode: 'sync' (all neurons at once) or 'async' (one at a time, "
+             "random order). Default: sync.",
+    )
+    parser.add_argument(
         "--analyze", action="store_true",
         help="Print group orthogonality analysis of all letters before running",
     )
@@ -75,8 +80,10 @@ def main():
 
     result = net.predict(
         noisy_query.flatten(),
+        mode=args.mode,
         max_iterations=args.max_iter,
         verbose=not args.quiet,
+        seed=args.seed,
     )
 
     # result
