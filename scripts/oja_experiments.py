@@ -184,7 +184,7 @@ def experiment_loadings(features, w_oja, w_ref, out_dir, w_oja_std=None):
     for bars, vals in [(bars_oja, w_oja), (bars_ref, w_ref)]:
         for b, v in zip(bars, vals):
             ax.text(b.get_x() + b.get_width() / 2, v + (0.01 if v >= 0 else -0.01),
-                    f"{v:.4f}", ha="center", va="bottom" if v >= 0 else "top", fontsize=7)
+                    f"{v:.6f}", ha="center", va="bottom" if v >= 0 else "top", fontsize=5)
     ax.axhline(0, color="black", lw=0.6)
     ax.set_xticks(x)
     ax.set_xticklabels(features, rotation=30, ha="right")
@@ -516,7 +516,7 @@ def experiment_hebb_vs_oja(X, out_dir, lr, epochs, n_seeds=5):
 
 # Main
 def main():
-    LR, EPOCHS, DECAY, N_SEEDS = 0.1, 1000, 0.01, 5
+    LR, EPOCHS, DECAY, N_SEEDS = 0.1, 10000, 0.01, 5
     HEBB_LR, HEBB_EPOCHS = 0.001, 200
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
