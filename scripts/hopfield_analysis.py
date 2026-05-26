@@ -148,9 +148,9 @@ def run_steps(net: HopfieldNetwork, initial: np.ndarray,
         for _ in range(max_iter):
             s_prev = s.copy()
             s = np.where(net.W @ s > 0, 1.0, -1.0)
-            states.append(s.copy())
             if np.array_equal(s, s_prev):
                 break
+            states.append(s.copy())
             if s_pprev is not None and np.array_equal(s, s_pprev):
                 break
             s_pprev = s_prev
@@ -167,9 +167,9 @@ def run_steps(net: HopfieldNetwork, initial: np.ndarray,
                 if new_i != s[i]:
                     s[i] = new_i
                     changes += 1
-            states.append(s.copy())
             if changes == 0:
                 break
+            states.append(s.copy())
         return states
 
     raise ValueError(f"Unknown mode '{mode}'.")

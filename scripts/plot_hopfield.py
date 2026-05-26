@@ -4,7 +4,7 @@ hopfield_convergence_plot.py
 Visualises every step of Hopfield network convergence for a single query,
 showing the board state and energy at each stage:
 
-    original → noisy query → step 1 → step 2 → … → converged
+    original → noisy (t=0) → t=1 → … → converged
 
 Usage
 ─────
@@ -65,9 +65,9 @@ def run_steps(net: HopfieldNetwork, initial: np.ndarray,
     for _ in range(max_iter):
         s_prev = s.copy()
         s = np.where(net.W @ s > 0, 1.0, -1.0)
-        states.append(s.copy())
-        if np.array_equal(s, s_prev):          # fixed point
+        if np.array_equal(s, s_prev):          # fixed point (already in states)
             break
+        states.append(s.copy())
         if s_pprev is not None and np.array_equal(s, s_pprev):  # 2-cycle
             break
         s_pprev = s_prev
@@ -124,75 +124,67 @@ def plot_convergence(patterns_file: str, query_file: str,
 
     # collect all update states
     update_states = run_steps(net, noisy, max_iter)
-    outcome       = classify(update_states[-1], stored)
-    border        = OUTCOME_COLOR[outcome]
+    n_updates = len(update_states) - 1
+    # duplicate final state to show fixed-point convergence (display only)
+    if n_updates >= 1:
+        update_states.append(update_states[-1].copy())
+    outcome = classify(update_states[-1], stored)
+    border  = OUTCOME_COLOR[outcome]
 
-    # columns: original | noisy | step-0 | step-1 | … | step-N
-    # step-0 is the noisy input seen from the network's perspective (= noisy)
-    # step-1 … step-N are the update states
-    n_steps      = len(update_states)          # includes the initial noisy
-    n_cols       = 2 + n_steps                 # original + noisy + all steps
+    # columns: original | t=0 (noisy, fed in) | t=1 | … | t=N
+    n_cols       = 1 + len(update_states)
     cell_w       = 1.4                         # inches per cell
     cell_h       = 1.8
     fig_w        = max(8, n_cols * cell_w + 1.0)
 
     fig, axes = plt.subplots(
         1, n_cols,
-        figsize=(fig_w, cell_h + 1.0),
+        figsize=(fig_w, cell_h + 1.6),
         facecolor=BG,
         dpi=FIG_DPI,
     )
     fig.set_dpi(FIG_DPI)
+    axes = np.atleast_1d(axes)
 
-    ax = axes[0]
-    draw_cell(ax, orig, border_color=C_NEUTRAL)
-    e_orig = net.energy(orig)
-    ax.set_title(f"Original\n[{label_str}]",
-                 fontsize=8, color=TITLE_COLOR, pad=4)
-    ax.text(2.5, -0.55, f"E = {e_orig:.2f}",
-            ha="center", va="top", fontsize=7.5, color=SUB_COLOR,
-            transform=ax.transData)
-
-    ax = axes[1]
-    draw_cell(ax, noisy, border_color=C_NEUTRAL)
-    e_noisy = net.energy(noisy)
     n_flipped = int(np.sum(orig != noisy))
-    ax.set_title(f"Noisy input\n({noise:.0%} / {n_flipped} px)",
-                 fontsize=8, color=TITLE_COLOR, pad=4)
-    ax.text(2.5, -0.55, f"E = {e_noisy:.2f}",
-            ha="center", va="top", fontsize=7.5, color=SUB_COLOR,
-            transform=ax.transData)
 
+    def _annotate_panel(ax, state, title, title_color, title_weight, border_c, lw,
+                        energy, energy_color):
+        draw_cell(ax, state, border_color=border_c, lw=lw)
+        ax.set_title(title, fontsize=8, color=title_color, fontweight=title_weight,
+                     pad=6, ha="center")
+        ax.text(0.5, -0.10, f"E = {energy:.2f}", transform=ax.transAxes,
+                ha="center", va="top", fontsize=7.5, color=energy_color)
 
+    _annotate_panel(
+        axes[0], orig,
+        f"Original\n[{label_str}]",
+        TITLE_COLOR, "normal", C_NEUTRAL, 1.8,
+        net.energy(orig), SUB_COLOR,
+    )
 
+    n_states = len(update_states)
     for si, state in enumerate(update_states):
-        ax = axes[2 + si]
-        is_last = (si == len(update_states) - 1)
+        ax = axes[1 + si]
+        is_converged_copy = n_updates >= 1 and si == n_states - 1
+        e = net.energy(state)
 
         if si == 0:
-            label = "t = 0\n(fed in)"
-            bc    = C_NEUTRAL
+            title = f"Noisy input\n(t = 0, {noise:.0%} / {n_flipped} px)"
+            bc, lw = C_NEUTRAL, 1.8
+            tc, tw, ec = TITLE_COLOR, "normal", SUB_COLOR
+        elif is_converged_copy:
+            title = f"t = {si}\n({outcome})"
+            bc, lw = border, 3.0
+            tc, tw, ec = border, "bold", border
         else:
-            label = f"t = {si}"
-            bc    = border if is_last else "#888888"
+            title = f"t = {si}"
+            bc, lw = "#888888", 1.8
+            tc, tw, ec = TITLE_COLOR, "normal", SUB_COLOR
 
-        draw_cell(ax, state, border_color=bc,
-                  lw=3.0 if is_last else 1.8)
+        _annotate_panel(ax, state, title, tc, tw, bc, lw, e, ec)
 
-        e = net.energy(state)
-        ax.set_title(label, fontsize=8,
-                     color=border if is_last else TITLE_COLOR, pad=4)
-        ax.text(2.5, -0.55, f"E = {e:.2f}",
-                ha="center", va="top", fontsize=7.5,
-                color=border if is_last else SUB_COLOR,
-                transform=ax.transData)
-
-        if is_last:
-            ax.set_title(f"t = {si}  \n({outcome})",
-                         fontsize=8, color=border,
-                         fontweight="bold", pad=4)
-
-    fig.subplots_adjust(wspace=0.35)
+    fig.subplots_adjust(wspace=0.35, bottom=0.26, top=0.78)
 
     _, sim, is_inv = best_match(update_states[-1], stored)
     match_name, _, _ = best_match(update_states[-1], stored)
@@ -205,7 +197,7 @@ def plot_convergence(patterns_file: str, query_file: str,
     fig.suptitle(
         f"Hopfield convergence  ·  query [{label_str}]  ·  "
         f"noise {noise:.0%}  ·  seed {seed}  ·  "
-        f"converged in {len(update_states)-1} step(s)  →  {outcome_str}",
+        f"converged in {n_updates} step(s)  →  {outcome_str}",
         fontsize=9, color=TITLE_COLOR, y=1.04,
     )
 
@@ -223,13 +215,12 @@ def plot_convergence(patterns_file: str, query_file: str,
         framealpha=0.7,
         facecolor=BG,
         edgecolor="#cccccc",
-        bbox_to_anchor=(0.5, -0.12),
+        bbox_to_anchor=(0.5, 0.02),
     )
 
-    plt.tight_layout()
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, dpi=FIG_DPI, bbox_inches="tight",
-                pad_inches=0.2, facecolor=BG)
+                pad_inches=0.25, facecolor=BG)
     plt.close(fig)
     print(f"Saved → {out_path}")
 
