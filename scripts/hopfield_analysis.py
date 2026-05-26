@@ -16,8 +16,10 @@ Plots generated
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(SRC))
 sys.stdout.reconfigure(encoding="utf-8")
 
 import numpy as np
@@ -27,7 +29,7 @@ from matplotlib.colors import TwoSlopeNorm
 from sklearn.decomposition import PCA
 
 from utils.letters import load_patterns, load_letters, best_match
-from HopfieldNetwork import HopfieldNetwork
+from hopfield.HopfieldNetwork import HopfieldNetwork
 
 # ── Style ─────────────────────────────────────────────────────────────────────
 
