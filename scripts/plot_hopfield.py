@@ -21,9 +21,10 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from pathlib import Path
 
-# ── path setup (mirrors hopfield_analysis.py) ─────────────────────────────────
-ROOT = Path(__file__).resolve().parents[2]
+# ── path setup ────────────────────────────────────────────────────────────────
+ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "src"))
 sys.stdout.reconfigure(encoding="utf-8")
 
 from utils.letters import load_patterns, load_query, best_match, add_noise
