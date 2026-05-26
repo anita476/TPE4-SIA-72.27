@@ -180,9 +180,10 @@ def mode_tag(mode: str) -> str:
 
 def flip_noise(flat: np.ndarray, noise: float,
                rng: np.random.Generator) -> np.ndarray:
-    """Return copy of *flat* with *noise* fraction of pixels flipped."""
+    """Return copy of *flat* with *noise* fraction of pixels flipped.
+    Uses round() so that e.g. 30% of 25 neurons = 8 flips, not 7."""
     out = flat.copy()
-    n_flip = int(len(out) * noise)
+    n_flip = round(len(out) * noise)
     if n_flip > 0:
         out[rng.choice(len(out), size=n_flip, replace=False)] *= -1
     return out
@@ -382,10 +383,10 @@ def plot_energy_convergence(stored: dict, query_name: str, out: Path,
         all_curves = []
         outcomes   = []
         for seed in range(n_seeds):
-            noisy_seed = seed * 100 + int(noise * 10)
+            base_seed = seed * 100 + int(noise * 10)
             noisy  = flip_noise(query.flatten(), noise,
-                                np.random.default_rng(noisy_seed))
-            states = run_steps(net, noisy, mode=mode, seed=noisy_seed)
+                                np.random.default_rng(base_seed))
+            states = run_steps(net, noisy, mode=mode, seed=base_seed)
             all_curves.append([net.energy(s) for s in states])
             outcomes.append(classify(states[-1], stored))
 
@@ -658,7 +659,7 @@ def main():
 
     apply_style()
 
-    patterns_file = ROOT / "data" / "patterns_worst.txt"
+    patterns_file = ROOT / "data" / "patterns.txt"
     letters_file  = ROOT / "data" / "letters.txt"
     out_dir       = ROOT / "results" / "hopfield" / mode
 

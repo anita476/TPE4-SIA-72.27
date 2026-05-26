@@ -180,7 +180,7 @@ def add_noise(pattern: np.ndarray, noise_pct: float, seed: int = None) -> np.nda
     rng = np.random.default_rng(seed)
 
     flat = pattern.flatten().copy()
-    n_flip = max(1, int(len(flat) * noise_pct))
+    n_flip = round(len(flat) * noise_pct)
     flip_indices = rng.choice(len(flat), size=n_flip, replace=False)
     flat[flip_indices] *= -1
 
