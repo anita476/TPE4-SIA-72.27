@@ -65,7 +65,6 @@ class HopfieldNetwork:
             print(f"  [sync] initial state  (energy: {self.energy(s):.2f})")
             print_pattern("init", s)
 
-        # TODO: explain in presentation why we check period-1 and period-2
         s_pprev = None
         for step in range(1, max_iterations + 1):
             s_prev = s.copy()
@@ -130,6 +129,5 @@ class HopfieldNetwork:
     def energy(self, state: np.ndarray) -> float:
         return float(-0.5 * state @ self.W @ state)
 
-    # @todo investigate
     def max_patterns(self) -> int:
         return int(0.15 * self.n)
