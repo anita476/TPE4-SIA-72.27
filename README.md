@@ -104,13 +104,13 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-| Paquete                 | Uso principal                                        |
-| ----------------------- | ---------------------------------------------------- |
-| `numpy`, `pandas`       | Modelos y datos tabulares                            |
-| `matplotlib`            | Gráficos en scripts y Kohonen                        |
-| `seaborn`               | Heatmaps de letras (`utils/letters.py`)              |
-| `scikit-learn`          | PCA de referencia, métricas Oja                      |
-| `geopandas`             | Mapa geográfico de Europa (Kohonen)                  |
+| Paquete           | Uso principal                           |
+| ----------------- | --------------------------------------- |
+| `numpy`, `pandas` | Modelos y datos tabulares               |
+| `matplotlib`      | Gráficos en scripts y Kohonen           |
+| `seaborn`         | Heatmaps de letras (`utils/letters.py`) |
+| `scikit-learn`    | PCA de referencia, métricas Oja         |
+| `geopandas`       | Mapa geográfico de Europa (Kohonen)     |
 
 **Notas:**
 
@@ -165,24 +165,24 @@ Los patrones se convierten internamente a vectores ±1 de dimensión 25.
 
 Cada `kohonen_*.json` define un experimento. El nombre del archivo (sin extensión) es el subdirectorio de salida bajo `results/plots/`.
 
-| Campo         | Tipo          | Descripción                                       |
-| ------------- | ------------- | ------------------------------------------------- |
-| `k`           | int           | Lado de la grilla (`k×k` neuronas)                |
-| `eta_0`       | float         | Tasa de aprendizaje inicial η(0)                  |
-| `radius_0`    | float \| null | Radio inicial del vecindario; `null` → se usa `k` |
+| Campo         | Tipo          | Descripción                                                       |
+| ------------- | ------------- | ----------------------------------------------------------------- |
+| `k`           | int           | Lado de la grilla (`k×k` neuronas)                                |
+| `eta_0`       | float         | Tasa de aprendizaje inicial η(0)                                  |
+| `radius_0`    | float \| null | Radio inicial del vecindario; `null` → se usa `k`                 |
 | `n_iter`      | int \| null   | Iteraciones; `null` → `500 × nº de features` (7 → 3500 en Europa) |
-| `weight_init` | str           | `random` o `samples`                              |
-| `similarity`  | str           | Neurona ganadora: `euclidean` o `exponential`     |
-| `seed`        | int           | Semilla para reproducibilidad                     |
+| `weight_init` | str           | `random` o `samples`                                              |
+| `similarity`  | str           | Neurona ganadora: `euclidean` o `exponential`                     |
+| `seed`        | int           | Semilla para reproducibilidad                                     |
 
-| Archivo                        | `k` | `similarity`  | Notas                                                        |
-| ------------------------------ | --- | ------------- | ------------------------------------------------------------ |
-| `kohonen_2x2.json`             | 2   | `euclidean`   | Grilla mínima                                                |
-| `kohonen_3x3.json`             | 3   | `euclidean`   |                                                              |
-| `kohonen_4x4.json`             | 4   | `euclidean`   |                                                              |
-| `kohonen_5x5_default.json`     | 5   | `euclidean`   | Configuración principal del informe                          |
-| `kohonen_5x5_exponential.json` | 5   | `exponential` | Misma grilla 5×5, neurona ganadora por score exponencial     |
-| `kohonen_10x10.json`           | 28  | `euclidean`   | Nombre histórico; grilla 28×28 (≈ un país por neurona)       |
+| Archivo                        | `k` | `similarity`  | Notas                                                    |
+| ------------------------------ | --- | ------------- | -------------------------------------------------------- |
+| `kohonen_2x2.json`             | 2   | `euclidean`   | Grilla mínima                                            |
+| `kohonen_3x3.json`             | 3   | `euclidean`   |                                                          |
+| `kohonen_4x4.json`             | 4   | `euclidean`   |                                                          |
+| `kohonen_5x5_default.json`     | 5   | `euclidean`   | Configuración principal del informe                      |
+| `kohonen_5x5_exponential.json` | 5   | `exponential` | Misma grilla 5×5, neurona ganadora por score exponencial |
+| `kohonen_10x10.json`           | 28  | `euclidean`   | Nombre histórico; grilla 28×28 (≈ un país por neurona)   |
 
 Nuevos experimentos: copiar un JSON existente en `configs/` y pasar la ruta a `--config`; no hace falta tocar código.
 
@@ -400,15 +400,15 @@ python src/hopfield/hopfield.py data/patterns.txt data/query_W.txt --type modern
 python scripts/plot_hopfield.py data/patterns.txt data/query_W.txt --noise 0.2 --seed 42 --max-iter 20 --mode sync --out results/hopfield/convergence.png
 ```
 
-| Argumento       | Tipo  | Default           | Descripción                                              |
-| --------------- | ----- | ----------------- | -------------------------------------------------------- |
-| `patterns_file` | str   | —                 | Patrones almacenados                                     |
-| `query_file`    | str   | —                 | Consulta                                                 |
-| `--noise`       | float | `0.2`             | Fracción de ruido                                        |
-| `--seed`        | int   | `42`              | Semilla                                                  |
-| `--max-iter`    | int   | `20`              | Máximo de iteraciones                                    |
-| `--out`         | str   | `convergence.png` | Ruta del PNG                                             |
-| `--mode`        | str   | `sync`            | `sync` o `async`                                         |
+| Argumento       | Tipo  | Default           | Descripción                                                                                      |
+| --------------- | ----- | ----------------- | ------------------------------------------------------------------------------------------------ |
+| `patterns_file` | str   | —                 | Patrones almacenados                                                                             |
+| `query_file`    | str   | —                 | Consulta                                                                                         |
+| `--noise`       | float | `0.2`             | Fracción de ruido                                                                                |
+| `--seed`        | int   | `42`              | Semilla                                                                                          |
+| `--max-iter`    | int   | `20`              | Máximo de iteraciones                                                                            |
+| `--out`         | str   | `convergence.png` | Ruta del PNG                                                                                     |
+| `--mode`        | str   | `sync`            | `sync` o `async`                                                                                 |
 | `--no-fields`   | flag  | off               | No generar figura de campos locales (p. ej. `convergence_fields.png` si `--out convergence.png`) |
 
 ### `scripts/hopfield_noise_tolerance.py`
@@ -470,10 +470,10 @@ Sin parámetros CLI; datos fijos en `data/europe.csv`, salida en `results/oja/`.
 python PCA/main.py --data data/europe.csv --out results/plots --seed 1
 ```
 
-| Argumento | Tipo | Default           | Descripción          |
-| --------- | ---- | ----------------- | -------------------- |
-| `--data`  | str  | `data/europe.csv` | CSV de entrada       |
-| `--out`   | str  | `results/plots`   | Directorio de salida |
+| Argumento | Tipo | Default           | Descripción                          |
+| --------- | ---- | ----------------- | ------------------------------------ |
+| `--data`  | str  | `data/europe.csv` | CSV de entrada                       |
+| `--out`   | str  | `results/plots`   | Directorio de salida                 |
 | `--seed`  | int  | `1`               | Semilla (`random_state`) para PCA 2D |
 
 ---
