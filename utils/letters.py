@@ -139,61 +139,60 @@ def classify_recovery(
     return "spurious"
 
 
-def group_analysis(letters):
-    flat_letters = {
-        k: m.flatten() for k, m in letters.items()
-    }
-    all_groups = itertools.combinations(flat_letters.keys(), 4)
+def group_analysis(letters: dict, group_size: int = 4):
+    flat_letters = {k: m.flatten() for k, m in letters.items()}
+    all_groups   = itertools.combinations(flat_letters.keys(), group_size)
 
     avg_dot_product = []
     max_dot_product = []
 
     for g in all_groups:
-        group = np.array([v for k,v in flat_letters.items() if k in g])
+        group = np.array([v for k, v in flat_letters.items() if k in g])
         orto_matrix = group.dot(group.T)
         np.fill_diagonal(orto_matrix, 0)
-        #print(f'{g}\n{orto_matrix}\n-------------------------')
         row, _ = orto_matrix.shape
-        avg_dot_product.append((np.abs(orto_matrix).sum()/(orto_matrix.size - row),g))
+        avg_dot_product.append(
+            (np.abs(orto_matrix).sum() / (orto_matrix.size - row), g)
+        )
         mav_v = np.abs(orto_matrix).max()
-        max_dot_product.append(((mav_v,np.count_nonzero(np.abs(orto_matrix)==mav_v)/2),g))
+        max_dot_product.append(
+            ((mav_v, np.count_nonzero(np.abs(orto_matrix) == mav_v) / 2), g)
+        )
 
+    df = pd.DataFrame(sorted(avg_dot_product), columns=['|<,>| medio', 'group'])
 
-    # ahora imprimo los grupos de valores mas bajo, medio, alto
-    df = pd.DataFrame(sorted(avg_dot_product),columns=['|<,>| medio','group'])
-    #df.head(15).style.format({'|<,>| medio':"{:.2f}"}).hide(axis='index')
-    print("Average Dot product\n-------------------")
-
-    print("Best 15:\n")
+    print(f"\nAverage Dot product  (group size = {group_size})")
+    print("─" * 50)
+    print("Best 15 (most orthogonal):\n")
     print(df.head(15).to_string(index=False, float_format=lambda x: f'{x:.2f}'))
-    print("Worst 5:\n")
-    print(df.tail(5).to_string(index=False,float_format=lambda  x:f'{x:.2f}'))
-    print("Max Dot product\n-------------------")
+    print("\nWorst 5 (most correlated):\n")
+    print(df.tail(5).to_string(index=False, float_format=lambda x: f'{x:.2f}'))
 
-    print("Best 15 (lowest)\n")
-    df2 = pd.DataFrame(sorted(max_dot_product),columns=['|<,>| max','group'])
-    print(df2.head(15).to_string(index=False, formatters={'|<,>| max': lambda t: f'max: {t[0]:.0f} | count: {int(t[1])}'}))
+    print("\nMax Dot product")
+    print("─" * 50)
+    df2 = pd.DataFrame(sorted(max_dot_product), columns=['|<,>| max', 'group'])
+    print("Best 15 (lowest max):\n")
+    print(df2.head(15).to_string(
+        index=False,
+        formatters={'|<,>| max': lambda t: f'max: {t[0]:.0f} | count: {int(t[1])}'}
+    ))
 
-    df3 = df2.merge(df)
-    df3 = df3[['|<,>| max','|<,>| medio', 'group']]
-    print("Top 15")
-    print(df3.head(15).to_string(index=False,float_format=lambda  x:f'{x:.2f}'))
+    df3 = df2.merge(df)[['|<,>| max', '|<,>| medio', 'group']]
+    print("\nTop 15 combined:\n")
+    print(df3.head(15).to_string(index=False, float_format=lambda x: f'{x:.2f}'))
 
-    print("Worst 15")
-
+    print("\nWorst 15 combined:\n")
     df_worst = df3.sort_values(
         by=['|<,>| max', '|<,>| medio'],
         ascending=[False, False],
         key=lambda col: col if col.name == '|<,>| medio'
-        else col.apply(lambda t: t[0])  # extract max value from tuple
+        else col.apply(lambda t: t[0])
     )
-
     print(df_worst.head(15).to_string(
         index=False,
         float_format=lambda x: f'{x:.2f}'
     ))
 
-    return
 
 
 def add_noise(pattern: np.ndarray, noise_pct: float, seed: int = None) -> np.ndarray:

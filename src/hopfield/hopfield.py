@@ -9,6 +9,7 @@ from utils.letters import (
 )
 from utils.display_hopfield import print_pattern, print_separator
 from HopfieldNetwork import HopfieldNetwork
+from ContinuousHopfieldNetwork import ContinuousHopfieldNetwork
 import numpy as np
 import argparse
 
@@ -44,13 +45,22 @@ def main():
         "--analyze", action="store_true",
         help="Print group orthogonality analysis of all letters before running",
     )
+    parser.add_argument(
+        "--type", dest="net_type", choices=["classic", "modern"],
+        default="classic",
+        help="Network type: 'classic' (binary) or 'modern' (continuous). Default: classic",
+    )
+    parser.add_argument(
+        "--beta", type=float, default=4.0,
+        help="Inverse temperature β for the modern network (ignored for classic). Default: 4.0",
+    )
     args = parser.parse_args()
 
     if args.analyze:
         letters = load_letters("../../data/letters.txt")
         print("---------------------------------------------------")
         print("------------------GROUP ANALYSIS ------------------")
-        group_analysis(letters)
+        group_analysis(letters,10)
 
     # load
     stored = load_patterns(args.patterns_file)
@@ -73,21 +83,36 @@ def main():
 
     # train
     pattern_matrix = np.array([p.flatten() for p in stored.values()])
-    net = HopfieldNetwork(n=25)
-    net.initialize_weights(pattern_matrix)
+    if args.net_type == "modern":
+        net = ContinuousHopfieldNetwork(d=25, beta=args.beta)
+        net.store_patterns(pattern_matrix)
+    else:
+        net = HopfieldNetwork(n=25)
+        net.initialize_weights(pattern_matrix)
 
     print_separator('═')
     print("  Running Hopfield network")
     print_separator()
 
 
-    result = net.predict(
-        noisy_query.flatten(),
-        mode=args.mode,
-        max_iterations=args.max_iter,
-        verbose=not args.quiet,
-        seed=args.seed,
-    )
+    if args.net_type == "modern":
+        xi = noisy_query.flatten().astype(float)
+        xi = xi / (np.linalg.norm(xi) + 1e-12)
+        result = net.predict(
+            xi,
+            max_iterations=args.max_iter,
+            tol=1e-6,
+            verbose=not args.quiet,
+        )
+        result = np.where(result > 0, 1.0, -1.0)
+    else:
+        result = net.predict(
+            noisy_query.flatten(),
+            mode=args.mode,
+            max_iterations=args.max_iter,
+            verbose=not args.quiet,
+            seed=args.seed,
+        )
 
     # result
     print_separator('═')
