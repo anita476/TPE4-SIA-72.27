@@ -28,17 +28,17 @@ Aprendizaje no supervisado: Kohonen, Oja/Sanger, Hopfield y PCA. Cuarto trabajo 
 
 ### Scripts (`scripts/`)
 
-| Script                                | Propósito                                                                            |
-| ------------------------------------- | ------------------------------------------------------------------------------------ |
-| `scripts/kohonen_analysis.py`         | Entrena Kohonen con un JSON y genera el paquete completo de gráficos + `summary.txt` |
-| `scripts/europe_map_plot.py`          | Solo mapa geográfico de clusters (`europe_geographic.png`)                           |
-| `scripts/oja_experiments.py`          | Batería de experimentos Oja/Sanger sobre `data/europe.csv`                           |
-| `scripts/hopfield_analysis.py`        | Batería de 9 figuras de análisis Hopfield (sync o async)                             |
-| `scripts/hopfield_sync_vs_async.py`   | Comparación energía, pasos, trayectorias y tiempo sync vs async                      |
-| `scripts/hopfield_noise_tolerance.py` | Curvas de tolerancia al ruido por patrón                                             |
-| `scripts/plot_hopfield.py`            | Convergencia paso a paso de una consulta (energía y campos locales)                  |
-| `scripts/compare_letters.py`          | Matriz de producto interno normalizado entre patrones                                |
-| `scripts/plot_letters.py`             | Visualización interactiva del alfabeto 5×5 (`matplotlib`)                            |
+| Script                                | Propósito                                                                              |
+| ------------------------------------- | -------------------------------------------------------------------------------------- |
+| `scripts/kohonen_analysis.py`         | Entrena Kohonen con un JSON y genera el paquete completo de gráficos + `summary.txt`   |
+| `scripts/europe_map_plot.py`          | Solo mapa geográfico de clusters (`europe_geographic.png`)                             |
+| `scripts/oja_experiments.py`          | Batería de experimentos Oja/Sanger sobre `data/europe.csv`                             |
+| `scripts/hopfield_analysis.py`        | Batería de 9 figuras de análisis Hopfield (sync o async)                               |
+| `scripts/hopfield_sync_vs_async.py`   | Comparación sync vs async: energía, pasos, trayectorias, tiempo y desglose de outcomes |
+| `scripts/hopfield_noise_tolerance.py` | Curvas de tolerancia al ruido por patrón                                               |
+| `scripts/plot_hopfield.py`            | Convergencia paso a paso de una consulta (energía y campos locales)                    |
+| `scripts/compare_letters.py`          | Matriz de producto interno normalizado entre patrones                                  |
+| `scripts/plot_letters.py`             | Visualización interactiva del alfabeto 5×5 (`matplotlib`)                              |
 
 ### Drivers en `src/`
 
@@ -268,10 +268,17 @@ python scripts/hopfield_sync_vs_async.py
 
 Salida en `results/hopfield/comparison/`:
 
-- `1_energy_overlay.png`
-- `2_steps_distribution.png`
-- `3_trajectory_low_noise.png`, `3_trajectory_mid_noise.png`
-- `4_wallclock_compare.png`
+| #   | Archivo                      | Contenido                                                                                                                 |
+| --- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `1_energy_overlay.png`       | Curvas de energía de ambos modos en los mismos ejes (promedio sobre seeds, varios niveles de ruido)                       |
+| 2   | `2_steps_distribution.png`   | Boxplots de iteraciones hasta convergencia por modo y nivel de ruido                                                      |
+| 3   | `3_trajectory_low_noise.png` | Trayectoria lado a lado (sync / async) con ruido 20%, seed 7                                                              |
+| 3   | `3_trajectory_mid_noise.png` | Igual con ruido 40%, seed 14                                                                                              |
+| 4   | `4_wallclock_compare.png`    | Tiempo de pared hasta convergencia por modo y ruido                                                                       |
+| 5   | `5_outcomes_paired.png`      | Barras apiladas por nivel de ruido: fracción de trials **exact** / **wrong** / **inverse** / **spurious** (sync vs async) |
+| 6   | `6_outcomes_table.png`       | Mismos datos que (5) en tabla numérica (% por ruido × modo × outcome)                                                     |
+
+Los gráficos 5 y 6 usan **1000 trials** por celda y niveles de ruido `4% … 60%` (paso 8%). Pueden tardar varios minutos al regenerarse.
 
 Tolerancia al ruido:
 
@@ -454,7 +461,18 @@ No recibe argumentos. Carga `../data/letters.txt` con rutas relativas al directo
 python scripts/hopfield_sync_vs_async.py
 ```
 
-Sin parámetros CLI. Usa `data/patterns.txt` y escribe en `results/hopfield/comparison/`.
+Sin parámetros CLI. Entrena sobre `data/patterns.txt` (patrones almacenados I, R, W, X) y escribe **7 PNG** en `results/hopfield/comparison/` (dos trayectorias en el plot 3). La consulta de referencia para trayectorias/energía es el tercer patrón (`W`), igual que en `hopfield_analysis.py`.
+
+| Salida                     | Función                   | Parámetros relevantes (en código)               |
+| -------------------------- | ------------------------- | ----------------------------------------------- |
+| `1_energy_overlay.png`     | `plot_energy_overlay`     | Varios niveles de ruido, promediado sobre seeds |
+| `2_steps_distribution.png` | `plot_steps_distribution` | 80 seeds; ruido 10%–60%                         |
+| `3_trajectory_*.png`       | `plot_trajectory_compare` | Bajo: 20% ruido, seed 7; medio: 40%, seed 14    |
+| `4_wallclock_compare.png`  | `plot_wallclock_compare`  | 60 seeds; 50 repeticiones por medición          |
+| `5_outcomes_paired.png`    | `plot_outcomes_paired`    | 1000 trials; outcomes vía `classify_recovery`   |
+| `6_outcomes_table.png`     | `plot_outcomes_table`     | Mismos datos que (5), tabla en %                |
+
+Categorías de outcome (compartidas con el resto del proyecto): **exact** (recuperación del original), **inverse**, **wrong** (otro patrón almacenado), **spurious** (estado no almacenado).
 
 ### `scripts/oja_experiments.py`
 
@@ -525,7 +543,7 @@ results/
 ├── hopfield/
 │   ├── sync/                # hopfield_analysis.py
 │   ├── async/
-│   ├── comparison/          # hopfield_sync_vs_async.py
+│   ├── comparison/          # hopfield_sync_vs_async.py (1–6, ver README)
 │   └── noise/               # hopfield_noise_tolerance.py
 ├── letters/                 # compare_letters.py
 └── oja/                     # oja_experiments.py
