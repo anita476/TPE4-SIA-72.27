@@ -228,3 +228,4 @@ data/dataset_characterization.py
 data/hi.py
 data/radar.py
 scripts/schedules_plot.py
+*.png
