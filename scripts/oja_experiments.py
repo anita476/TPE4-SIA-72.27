@@ -447,7 +447,7 @@ def experiment_pc1_ranking_biplot(X, countries, features, w_oja, out_dir, scores
         color = "seagreen" if load >= 0 else "indianred"
         ax_top.annotate("", xy=(load, j), xytext=(0, j),
                         arrowprops=dict(arrowstyle="-|>", color=color, lw=1.6))
-        ax_top.text(load + (pad if load >= 0 else -pad), j, f"{wv:.3f}",
+        ax_top.text(load + (pad if load >= 0 else -pad), j, f"{wv:.4f}",
                     va="center", ha="left" if load >= 0 else "right", fontsize=7)
     ax_top.set_yticks(yf)
     ax_top.set_yticklabels(feats_sorted, fontsize=8)
@@ -461,7 +461,7 @@ def experiment_pc1_ranking_biplot(X, countries, features, w_oja, out_dir, scores
     ax_bot.barh(yc, scores_sorted, color=colors, xerr=std_sorted, capsize=2,
                 error_kw={"lw": 0.6, "ecolor": "black"})
     for y, v in zip(yc, scores_sorted):
-        ax_bot.text(v + (pad if v >= 0 else -pad), y, f"{v:.2f}",
+        ax_bot.text(v + (pad if v >= 0 else -pad), y, f"{v:.4f}",
                     va="center", ha="left" if v >= 0 else "right", fontsize=7)
     ax_bot.set_yticks(yc)
     ax_bot.set_yticklabels(countries_sorted, fontsize=8)
