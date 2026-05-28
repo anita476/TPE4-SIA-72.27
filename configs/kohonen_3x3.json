@@ -1,9 +1,0 @@
-{
-    "k": 3,
-    "eta_0": 0.01,
-    "radius_0": 3,
-    "n_iter": null,
-    "weight_init": "samples",
-    "similarity": "euclidean",
-    "seed": 42
-}

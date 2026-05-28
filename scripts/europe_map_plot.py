@@ -27,7 +27,7 @@ import geopandas as gpd
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from src.kohonen import Kohonen
+from src.kohonen.kohonen import Kohonen
 from utils.preprocessing import load_europe
 
 

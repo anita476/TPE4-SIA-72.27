@@ -1,10 +1,9 @@
 import numpy as np
 
-# TODO: could add different eta and radius schedulers
-
 class Kohonen:
     def __init__(self, k, input_dim, eta_0=0.1, radius_0=None,
-                 similarity="euclidean", weight_init="random", seed=None, verbose=True):
+                 similarity="euclidean", weight_init="random",
+                 n_iter=None, seed=None):
         """
         Parámetros
         ----------
@@ -33,18 +32,16 @@ class Kohonen:
             self.radius_0 = float(self.k)
         self.similarity = similarity
         self.weight_init = weight_init
+        self.n_iter = n_iter  # None → fit() uses 500 * input_dim
         self.rng = np.random.default_rng(seed)
         self.weights = None
-        # self.weights con shape (k, k, input_dim)
-            # k x k = neuronas
-            # input_dim = cantidad de variables (7 en nuestro caso)
 
     # -----------------------------------------------------------------
     # Inicialización de pesos
     # -----------------------------------------------------------------
     def _init_weights(self, X):
         shape = (self.k, self.k, self.input_dim)
-        
+
         if self.weight_init == "random":
             self.weights = self.rng.uniform(X.min(), X.max(), size=shape)
         elif self.weight_init == "samples":
@@ -57,7 +54,6 @@ class Kohonen:
                 # con reemplazo: inevitable
                 indices = self.rng.choice(X.shape[0], size=n_samples, replace=True)
             self.weights = X[indices].reshape(shape)
-            
         else:
             raise ValueError(f"Error: unknown weight_init: {self.weight_init}")
 
@@ -126,22 +122,20 @@ class Kohonen:
     # Schedules de η(t) y R(t)
     # -----------------------------------------------------------------
     def _eta(self, t, t_max):
-        """
-        Segun sugerencia de catedra: η(t) = 1/t
-        
-        """
-        # TODO add other schedulers
-        return self.eta_0 / (t+1) # +1 para no dividir por 0; PROBLEMA: decae muy rapido
-        
+        # η(n) = η₀ · exp(-n/τ₂),  τ₂ = 1000,  floor = 0.01
+        return max(0.01, self.eta_0 * np.exp(-t / 1000))
         
 
     def _radius(self, t, t_max):
-        return max(1.0, self.radius_0 / (1+t))
+        # σ(n) = σ₀ · exp(-n/τ₁),  τ₁ = 1000/log(σ₀),  floor = 1
+        tau1 = 1000 / np.log(self.radius_0) if self.radius_0 > 1 else 1000
+        r = self.radius_0 * np.exp(-t / tau1)
+        return max(1.0, r)
 
     # -----------------------------------------------------------------
     # Entrenamiento
     # -----------------------------------------------------------------
-    def fit(self, X, n_iter=None):
+    def fit(self, X, n_iter=None, n_snapshots=20):
         """
         Entrena la red.
 
@@ -154,30 +148,46 @@ class Kohonen:
             (con n = input_dim) si no se pasa nada.
         """
         if n_iter is None:
-            n_iter = 500 * self.input_dim
-        
+            n_iter = self.n_iter if self.n_iter is not None else 500 * self.input_dim
+
         P = X.shape[0]
         self._init_weights(X)
-        
-        # loop:
-        #   - elegir un x al azar de X (con o sin reemplazo, pensar)
-        #   - encontrar ganadora
-        #   - calcular η(t) y R(t)
-        #   - actualizar pesos
+
+        self.weight_history = []  # list of (k*k, input_dim) arrays
+        self.qe_history = []     # list of (t, qe)
+        self.te_history = []     # list of (t, te)
+        self.delta_history = []  # list of mean per-neuron ‖W(t+1)−W(t)‖, one per iteration
+        snapshot_interval = max(1, n_iter // n_snapshots)
 
         for t in range(n_iter):
-            idx = self.rng.integers(0,P)
-            x = X[idx]
-            
-            winner = self._winner(x)
-            
             eta = self._eta(t, n_iter)
             radius = self._radius(t, n_iter)
-            
+
+            if t % snapshot_interval == 0:
+                self.weight_history.append(
+                    self.weights.reshape(-1, self.input_dim).copy()
+                )
+                qe = self.quantization_error(X)
+                self.qe_history.append((t, qe))
+                self.te_history.append((t, self.topographic_error(X)))
+                print(f"    t={t:6d}/{n_iter}  η={eta:.4f}  R={radius:.4f}  QE={qe:.4f}")
+
+            # Reshuffle at the start of each epoch
+            if t % P == 0:
+                perm = self.rng.permutation(P)
+            x = X[perm[t % P]]
+
+            prev_W = self.weights.copy()
+            winner = self._winner(x)
             self._update(x, winner, eta, radius)
-            
-            if t % (n_iter // 10) == 0:
-                print(f"    t={t:5d}/{n_iter} η={eta:.4f}  R={radius:.2f}")
+            self.delta_history.append(
+                np.linalg.norm(self.weights - prev_W, axis=-1).mean()
+            )
+
+        # Final snapshot
+        self.weight_history.append(self.weights.reshape(-1, self.input_dim).copy())
+        self.qe_history.append((n_iter, self.quantization_error(X)))
+        self.te_history.append((n_iter, self.topographic_error(X)))
                 
                 
                 
@@ -227,12 +237,31 @@ class Kohonen:
             total += np.linalg.norm(x - self.weights[i, j])
         return total / len(X)
 
+    def topographic_error(self, X):
+        """
+        Fraction of samples where the BMU and 2nd BMU are not adjacent on the
+        grid (distance > 1). A low value means the map preserves
+        the input topology well.
+        """
+        errors = 0
+        for x in X:
+            diff = self.weights - x
+            if self.similarity == "euclidean":
+                scores = np.linalg.norm(diff, axis=2)
+            else:
+                scores = -np.exp(-np.sum(diff * diff, axis=-1))
+            flat_sorted = np.argsort(scores.ravel())
+            bmu1 = np.unravel_index(flat_sorted[0], scores.shape)
+            bmu2 = np.unravel_index(flat_sorted[1], scores.shape)
+            if max(abs(bmu1[0] - bmu2[0]), abs(bmu1[1] - bmu2[1])) > 1:
+                errors += 1
+        return errors / len(X)
+
     def activations_per_neuron(self, X):
         """
         Cuenta cuántos registros de X cayeron en cada neurona.
         Devuelve un array (k, k) de enteros.
         """
-        # TODO
         counts = np.zeros((self.k, self.k), dtype=int)
         for x in X:
             i, j = self._winner(x)

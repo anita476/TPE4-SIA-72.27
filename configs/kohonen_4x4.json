@@ -1,6 +1,6 @@
 {
     "k": 4,
-    "eta_0": 0.01,
+    "eta_0": 0.1,
     "radius_0": 4,
     "n_iter": null,
     "weight_init": "samples",
